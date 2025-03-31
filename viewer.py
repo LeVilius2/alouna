@@ -16,11 +16,11 @@ def load_geojson(filepath):
         return None
 
 def scale_coordinates(coordinates, canvas_width, canvas_height):
-    """Scales Cartesian coordinates to fit the canvas."""
-    min_x = min(coord[0] for feature in coordinates for coord in feature)
-    max_x = max(coord[0] for feature in coordinates for coord in feature)
-    min_y = min(coord[1] for feature in coordinates for coord in feature)
-    max_y = max(coord[1] for feature in coordinates for coord in feature)
+    """Scales latitude and longitude coordinates to fit the canvas (swapped)."""
+    min_x = min(coord[1] for feature in coordinates for coord in feature) #changed to coord[1]
+    max_x = max(coord[1] for feature in coordinates for coord in feature) #changed to coord[1]
+    min_y = min(coord[0] for feature in coordinates for coord in feature) #changed to coord[0]
+    max_y = max(coord[0] for feature in coordinates for coord in feature) #changed to coord[0]
 
     width_range = max_x - min_x
     height_range = max_y - min_y
@@ -34,7 +34,7 @@ def scale_coordinates(coordinates, canvas_width, canvas_height):
     scaled_coordinates = []
     for feature in coordinates:
         scaled_feature = []
-        for x, y in feature:
+        for y, x in feature: #changed to y,x
             scaled_x = (x - min_x) * x_scale
             scaled_y = canvas_height - (y - min_y) * y_scale  # Invert y-axis
             scaled_feature.append((scaled_x, scaled_y))
@@ -43,7 +43,7 @@ def scale_coordinates(coordinates, canvas_width, canvas_height):
     return scaled_coordinates
 
 def draw_geojson(canvas, features):
-    """Draws GeoJSON features on the canvas."""
+    """Draws GeoJSON features on the canvas (latitude and longitude swapped)."""
     if not features:
         return
 
