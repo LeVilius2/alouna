@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoJSON Map Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src='https://unpkg.com/@turf/turf@6/turf.min.js'></script>
+    <style>
+        /* Basic styling for canvas */
+        canvas {
+            border: 1px solid #ccc;
+            background-color: #f8f9fa; /* Light background for the grid */
+        }
+        body {
+            font-family: 'Inter', sans-serif; /* Use Inter font */
+        }
+        /* Ensure container takes full height */
+        html, body {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        /* Make main content area flexible */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            overflow: hidden; /* Prevent overall page scroll */
+        }
+        /* Allow lists to scroll if content overflows */
+        .results-panel {
+            overflow-y: auto;
+        }
+        .canvas-container {
+            position: relative; /* Needed for absolute positioning of player */
+            overflow: auto; /* Allow scrolling if canvas is larger */
+        }
+         /* Style for the player marker */
+        #player-marker {
+            position: absolute;
+            width: 10px; /* Size of the marker */
+            height: 10px;
+            background-color: blue;
+            border-radius: 50%; /* Make it a circle */
+            border: 1px solid darkblue;
+            transform: translate(-50%, -50%); /* Center the marker on the coordinate */
+            pointer-events: none; /* Don't let it interfere with clicks */
+            z-index: 10; /* Ensure it's above drawn features */
+        }
+        /* Style for the interaction radius */
+        #interaction-radius {
+            position: absolute;
+            border: 1px dashed rgba(0, 0, 255, 0.5); /* Dashed blue circle */
+            border-radius: 50%;
+            transform: translate(-50%, -50%); /* Center it */
+            pointer-events: none;
+            z-index: 5; /* Below player marker but above features */
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col h-screen">
+
+    <header class="bg-blue-600 text-white p-4 shadow-md">
+        <h1 class="text-xl font-semibold">GeoJSON Map Explorer</h1>
+    </header>
+
+    <div class="main-content flex flex-col md:flex-row flex-grow p-4 gap-4">
+
+        <div class="flex-grow flex flex-col gap-4 md:w-3/4">
+            <div class="bg-white p-4 rounded-lg shadow">
+                <h2 class="text-lg font-semibold mb-2">Map View</h2>
+                 <p class="text-sm text-gray-600 mb-2">Use Arrow Keys to move. Current Position: <span id="current-pos" class="font-mono font-semibold">[0, 0]</span></p>
+                 <p class="text-sm text-gray-600 mb-2">Click 'Load GeoJSON' or use the sample data.</p>
+                 <input type="file" id="geojson-file-input" accept=".geojson,.json" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 mb-2"/>
+                 <div class="canvas-container border border-gray-300 rounded-lg overflow-hidden relative bg-white" style="width: 400px; height: 400px;">
+                    <canvas id="mapCanvas" width="400" height="400"></canvas>
+                    <div id="player-marker"></div>
+                    <div id="interaction-radius"></div>
+                 </div>
+            </div>
+        </div>
+
+        <div class="results-panel md:w-1/4 flex flex-col gap-4">
+            <div class="bg-white p-4 rounded-lg shadow flex-1">
+                <h2 class="text-lg font-semibold mb-2 text-green-700">Matched Objects (at location)</h2>
+                <ul id="matched-list" class="list-disc list-inside text-sm text-gray-800">
+                    </ul>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow flex-1">
+                <h2 class="text-lg font-semibold mb-2 text-orange-700">Nearby Objects (radius: 1 unit)</h2>
+                <ul id="near-list" class="list-disc list-inside text-sm text-gray-800">
+                    </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const MAP_WIDTH = 200;
+        const MAP_HEIGHT = 200;
+        const START_POS = [100, 100]; // Initial user position [x, y]
+        const INTERACTION_RADIUS = 1; // Radius for "near" check
+        const CANVAS_BG_COLOR = '#f8f9fa';
+        const GRID_COLOR = '#e0e0e0';
+        const FEATURE_COLOR = '#333333'; // Color for drawing GeoJSON features
+        const FEATURE_POINT_RADIUS = 3; // Size to draw points
+
+        // --- Global State ---
+        let currentPos = [...START_POS];
+        let geojsonData = null; // To store loaded GeoJSON features
+        let canvas, ctx;
+        let canvasContainer;
+        let scaleX, scaleY; // Scaling factors for drawing
+
+        // --- DOM Elements ---
+        const currentPosElement = document.getElementById('current-pos');
+        const matchedListElement = document.getElementById('matched-list');
+        const nearListElement = document.getElementById('near-list');
+        const fileInputElement = document.getElementById('geojson-file-input');
+        const playerMarkerElement = document.getElementById('player-marker');
+        const interactionRadiusElement = document.getElementById('interaction-radius');
+
+        // --- Sample GeoJSON Data ---
+        const sampleGeoJson = {
+          "type": "FeatureCollection",
+          "features": [
+            { "type": "Feature", "properties": { "name": "Center Point" }, "geometry": { "type": "Point", "coordinates": [100, 100] } },
+            { "type": "Feature", "properties": { "name": "Corner Square" }, "geometry": { "type": "Polygon", "coordinates": [ [ [10, 10], [20, 10], [20, 20], [10, 20], [10, 10] ] ] } },
+            { "type": "Feature", "properties": { "name": "Diagonal Line" }, "geometry": { "type": "LineString", "coordinates": [ [50, 50], [70, 70] ] } },
+            { "type": "Feature", "properties": { "name": "Nearby Circle Area" }, "geometry": { "type": "Polygon", "coordinates": [ [ [98, 98], [102, 98], [102, 102], [98, 102], [98, 98] ] ] } },
+             { "type": "Feature", "properties": { "name": "Far Point" }, "geometry": { "type": "Point", "coordinates": [150, 180] } }
+          ]
+        };
+
+        // --- Initialization ---
+        function init() {
+            canvas = document.getElementById('mapCanvas');
+            canvasContainer = document.querySelector('.canvas-container');
+            if (!canvas.getContext) {
+                alert('Canvas not supported by your browser!');
+                return;
+            }
+            ctx = canvas.getContext('2d');
+
+            // Calculate scaling factors based on canvas size and map dimensions
+            scaleX = canvas.width / MAP_WIDTH;
+            scaleY = canvas.height / MAP_HEIGHT;
+
+            // Load sample data initially
+            loadGeoJson(sampleGeoJson);
+
+            // Add event listeners
+            window.addEventListener('keydown', handleKeyPress);
+            fileInputElement.addEventListener('change', handleFileLoad);
+
+            // Initial draw and update
+            updateDisplay();
+        }
+
+        // --- GeoJSON Handling ---
+        function handleFileLoad(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    // Basic validation
+                    if (data && data.type === "FeatureCollection" && Array.isArray(data.features)) {
+                         loadGeoJson(data);
+                         // Reset position to start when new data is loaded
+                         currentPos = [...START_POS];
+                         updateDisplay();
+                    } else {
+                        alert("Invalid GeoJSON file. Must be a FeatureCollection.");
+                    }
+                } catch (error) {
+                    alert("Error parsing GeoJSON file: " + error.message);
+                }
+            };
+            reader.onerror = function() {
+                alert("Error reading file.");
+            };
+            reader.readAsText(file);
+        }
+
+        function loadGeoJson(data) {
+            geojsonData = data;
+            console.log("GeoJSON data loaded:", geojsonData);
+        }
+
+        // --- Drawing ---
+        function drawMap() {
+            // Clear canvas
+            ctx.fillStyle = CANVAS_BG_COLOR;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid (optional, can be performance intensive for large grids)
+            // drawGrid();
+
+            // Draw GeoJSON features if loaded
+            if (geojsonData && geojsonData.features) {
+                geojsonData.features.forEach(feature => {
+                    drawFeature(feature);
+                });
+            }
+
+            // Update the absolute positioned marker and radius
+            updateMarkerAndRadiusPosition();
+        }
+
+         function drawGrid() {
+            ctx.strokeStyle = GRID_COLOR;
+            ctx.lineWidth = 0.5;
+
+            // Draw vertical lines
+            for (let x = 0; x <= MAP_WIDTH; x += 10) { // Draw every 10 units
+                ctx.beginPath();
+                ctx.moveTo(x * scaleX, 0);
+                ctx.lineTo(x * scaleX, canvas.height);
+                ctx.stroke();
+            }
+            // Draw horizontal lines
+            for (let y = 0; y <= MAP_HEIGHT; y += 10) {
+                 ctx.beginPath();
+                 // Adjust y for canvas coordinates (0 is top)
+                 const canvasY = canvas.height - (y * scaleY);
+                 ctx.moveTo(0, canvasY);
+                 ctx.lineTo(canvas.width, canvasY);
+                 ctx.stroke();
+            }
+        }
+
+        function drawFeature(feature) {
+            if (!feature || !feature.geometry) return;
+
+            const geometry = feature.geometry;
+            const type = geometry.type;
+            const coordinates = geometry.coordinates;
+
+            ctx.fillStyle = FEATURE_COLOR;
+            ctx.strokeStyle = FEATURE_COLOR;
+            ctx.lineWidth = 1;
+
+            // Helper to transform map coords to canvas coords
+            const toCanvasX = (mapX) => mapX * scaleX;
+            // Y coordinate needs inversion because canvas Y=0 is at the top
+            const toCanvasY = (mapY) => canvas.height - (mapY * scaleY);
+
+            switch (type) {
+                case "Point":
+                    const [x, y] = coordinates;
+                    ctx.beginPath();
+                    ctx.arc(toCanvasX(x), toCanvasY(y), FEATURE_POINT_RADIUS * scaleX, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+
+                case "LineString":
+                    ctx.beginPath();
+                    coordinates.forEach((point, index) => {
+                        const [lx, ly] = point;
+                        if (index === 0) {
+                            ctx.moveTo(toCanvasX(lx), toCanvasY(ly));
+                        } else {
+                            ctx.lineTo(toCanvasX(lx), toCanvasY(ly));
+                        }
+                    });
+                    ctx.stroke();
+                    break;
+
+                case "Polygon":
+                    coordinates.forEach((ring, ringIndex) => {
+                        ctx.beginPath();
+                        ring.forEach((point, index) => {
+                            const [px, py] = point;
+                            if (index === 0) {
+                                ctx.moveTo(toCanvasX(px), toCanvasY(py));
+                            } else {
+                                ctx.lineTo(toCanvasX(px), toCanvasY(py));
+                            }
+                        });
+                        // Close the polygon ring
+                        // Note: GeoJSON Polygons expect the first and last point to be the same.
+                        // ctx.closePath(); // Often redundant if the ring is closed in data
+
+                        // For polygons, fill the outer ring and potentially handle holes if needed (more complex)
+                        if (ringIndex === 0) { // Only fill the outer ring for simplicity
+                           ctx.fillStyle = 'rgba(100, 100, 100, 0.3)'; // Semi-transparent fill
+                           ctx.fill();
+                           ctx.stroke(); // Outline
+                           ctx.fillStyle = FEATURE_COLOR; // Reset fill style
+                        } else {
+                            // Handle inner rings (holes) if necessary - requires more complex drawing logic
+                            ctx.stroke();
+                        }
+                    });
+                    break;
+
+                // Add cases for MultiPoint, MultiLineString, MultiPolygon if needed
+                default:
+                    console.warn("Unsupported geometry type:", type);
+            }
+        }
+
+        function updateMarkerAndRadiusPosition() {
+            const canvasX = currentPos[0] * scaleX;
+            // Invert Y for canvas coordinates
+            const canvasY = canvas.height - (currentPos[1] * scaleY);
+
+            // Update player marker position
+            playerMarkerElement.style.left = `${canvasX}px`;
+            playerMarkerElement.style.top = `${canvasY}px`;
+
+             // Update interaction radius position and size
+            const radiusCanvas = INTERACTION_RADIUS * scaleX; // Assuming uniform scaling for radius visual
+            interactionRadiusElement.style.left = `${canvasX}px`;
+            interactionRadiusElement.style.top = `${canvasY}px`;
+            interactionRadiusElement.style.width = `${radiusCanvas * 2}px`;
+            interactionRadiusElement.style.height = `${radiusCanvas * 2}px`;
+        }
+
+
+        // --- Navigation ---
+        function handleKeyPress(event) {
+            let moved = false;
+            switch (event.key) {
+                case 'ArrowUp':
+                    if (currentPos[1] < MAP_HEIGHT) {
+                        currentPos[1]++;
+                        moved = true;
+                    }
+                    break;
+                case 'ArrowDown':
+                     if (currentPos[1] > 0) {
+                        currentPos[1]--;
+                        moved = true;
+                    }
+                    break;
+                case 'ArrowLeft':
+                     if (currentPos[0] > 0) {
+                        currentPos[0]--;
+                        moved = true;
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (currentPos[0] < MAP_WIDTH) {
+                        currentPos[0]++;
+                        moved = true;
+                    }
+                    break;
+            }
+
+            if (moved) {
+                event.preventDefault(); // Prevent default arrow key scrolling
+                updateDisplay();
+            }
+        }
+
+        // --- Interaction Logic ---
+        function checkInteractions() {
+            const matched = [];
+            const near = [];
+
+            if (!geojsonData || !geojsonData.features) {
+                return { matched, near };
+            }
+
+            const userPoint = turf.point(currentPos);
+            const userBuffer = turf.buffer(userPoint, INTERACTION_RADIUS, { units: 'degrees' }); // Using 'degrees' as units placeholder for Cartesian - Turf primarily uses geo units, but buffer logic is geometric.
+
+            geojsonData.features.forEach(feature => {
+                const featureName = feature.properties?.name || 'Unnamed Feature';
+                let isMatched = false;
+                let isNear = false;
+
+                try {
+                    // 1. Check for exact match
+                    switch (feature.geometry.type) {
+                        case 'Point':
+                            // Use a small tolerance for point matching
+                            isMatched = turf.distance(userPoint, feature.geometry) < 0.01; // Tolerance
+                            break;
+                        case 'LineString':
+                            // Check if point is on the line (using distance with tolerance)
+                            isMatched = turf.pointToLineDistance(userPoint, feature.geometry, { units: 'degrees' }) < 0.01; // Tolerance
+                            break;
+                        case 'Polygon':
+                            // Check if point is inside or on the boundary
+                            isMatched = turf.booleanPointInPolygon(userPoint, feature.geometry, { ignoreBoundary: false });
+                            break;
+                    }
+
+                    // 2. Check for proximity (near) if not already matched
+                    if (!isMatched) {
+                         // Use booleanIntersects for buffer check - more robust
+                         isNear = turf.booleanIntersects(userBuffer, feature);
+
+                        // Alternative distance checks (might be less accurate for complex shapes):
+                        // let minDist = Infinity;
+                        // if (feature.geometry.type === 'Point') {
+                        //     minDist = turf.distance(userPoint, feature.geometry, { units: 'degrees' });
+                        // } else if (feature.geometry.type === 'LineString') {
+                        //     minDist = turf.pointToLineDistance(userPoint, feature.geometry, { units: 'degrees' });
+                        // } else if (feature.geometry.type === 'Polygon') {
+                        //      // Check distance to polygon boundary (simplified: check vertices)
+                        //      turf.coordEach(feature, (coord) => {
+                        //          minDist = Math.min(minDist, turf.distance(userPoint, turf.point(coord), { units: 'degrees' }));
+                        //      });
+                        //      // A more accurate check would involve point-to-edge distances
+                        // }
+                        // isNear = minDist <= INTERACTION_RADIUS;
+                    }
+
+                } catch (error) {
+                    console.error(`Error processing feature "${featureName}":`, error);
+                    // Decide how to handle errors, e.g., skip the feature
+                }
+
+
+                // Add to lists
+                if (isMatched) {
+                    matched.push(featureName);
+                } else if (isNear) {
+                    near.push(featureName);
+                }
+            });
+
+            return { matched, near };
+        }
+
+
+        // --- Display Update ---
+        function updateDisplay() {
+            // Update coordinate display
+            currentPosElement.textContent = `[${currentPos[0]}, ${currentPos[1]}]`;
+
+            // Redraw the map (including features and marker)
+            drawMap();
+
+            // Check interactions and update lists
+            const { matched, near } = checkInteractions();
+
+            updateList(matchedListElement, matched);
+            updateList(nearListElement, near);
+        }
+
+        function updateList(listElement, items) {
+            listElement.innerHTML = ''; // Clear previous items
+            if (items.length === 0) {
+                listElement.innerHTML = '<li class="text-gray-500 italic">None</li>';
+            } else {
+                items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.textContent = item;
+                    listElement.appendChild(li);
+                });
+            }
+        }
+
+        // --- Start the app ---
+        window.onload = init;
+
+    </script>
+
+</body>
+</html>
