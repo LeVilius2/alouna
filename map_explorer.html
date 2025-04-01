@@ -75,6 +75,7 @@
         const START_POS = [100, 100];
         const INTERACTION_RADIUS = 1;
         const MATCH_TOLERANCE = 0.01;
+        const TURF_DISTANCE_OPTIONS = { units: 'degrees' }; // Still used for Point distances
 
         // --- Global State ---
         let currentPos = [...START_POS];
@@ -89,17 +90,7 @@
         const messageAreaElement = document.getElementById('message-area');
 
         // --- Sample GeoJSON Data ---
-        const sampleGeoJson = {
-          "type": "FeatureCollection",
-          "features": [
-            { "type": "Feature", "properties": { "name": "Center Point" }, "geometry": { "type": "Point", "coordinates": [100, 100] } },
-            { "type": "Feature", "properties": { "name": "Corner Square" }, "geometry": { "type": "Polygon", "coordinates": [ [ [10, 10], [20, 10], [20, 20], [10, 20], [10, 10] ] ] } },
-            { "type": "Feature", "properties": { "name": "Diagonal Line" }, "geometry": { "type": "LineString", "coordinates": [ [50, 50], [70, 70] ] } },
-            { "type": "Feature", "properties": { "name": "Nearby Circle Area" }, "geometry": { "type": "Polygon", "coordinates": [ [ [98, 98], [102, 98], [102, 102], [98, 102], [98, 98] ] ] } },
-             { "type": "Feature", "properties": { "name": "Far Point" }, "geometry": { "type": "Point", "coordinates": [150, 180] } }
-          ]
-        };
-
+        const sampleGeoJson = { /* ... sample data ... */ };
 
         // --- Initialization ---
         function init() {
@@ -110,12 +101,12 @@
                 fileInputElement.click();
             });
             updateDisplay();
-            console.log("Debug logging enabled in checkInteractions."); // Notify that logging is on
+            console.log("Using manual distance calculation for LineStrings.");
         }
 
         // --- GeoJSON Handling ---
-        function handleFileLoad(event) {
-            const file = event.target.files[0];
+        function handleFileLoad(event) { /* ... no changes ... */
+             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -123,8 +114,8 @@
                     const data = JSON.parse(e.target.result);
                     if (data && data.type === "FeatureCollection" && Array.isArray(data.features)) {
                          loadGeoJson(data);
-                         currentPos = [...START_POS]; // Reset position
-                         updateDisplay(); // Update display after loading
+                         currentPos = [...START_POS];
+                         updateDisplay();
                     } else {
                         displayMessage("Invalid GeoJSON file. Must be a FeatureCollection.", "error");
                     }
@@ -136,15 +127,15 @@
             reader.readAsText(file);
         }
 
-        function loadGeoJson(data) {
-            geojsonData = data;
-            console.log("GeoJSON data loaded:", geojsonData); // Log loaded data for inspection
+        function loadGeoJson(data) { /* ... no changes ... */
+             geojsonData = data;
+            console.log("GeoJSON data loaded:", geojsonData);
             displayMessage("GeoJSON data loaded successfully.", "success");
         }
 
         // --- Navigation ---
-        function handleKeyPress(event) {
-            let moved = false;
+        function handleKeyPress(event) { /* ... no changes ... */
+             let moved = false;
             const [x, y] = currentPos;
 
             switch (event.key) {
@@ -168,24 +159,78 @@
             }
         }
 
-        // --- Interaction Logic (with Debug Logging) ---
+        // --- Manual Distance Calculation ---
+        /**
+         * Calculates the squared distance between two points.
+         * @param {number[]} p1 - First point [x, y]
+         * @param {number[]} p2 - Second point [x, y]
+         * @returns {number} Squared distance
+         */
+        function getSqDist(p1, p2) {
+            const dx = p1[0] - p2[0];
+            const dy = p1[1] - p2[1];
+            return dx * dx + dy * dy;
+        }
+
+        /**
+         * Calculates the squared distance from a point to a line segment.
+         * @param {number[]} p - The point [x, y]
+         * @param {number[]} a - Start point of the segment [x, y]
+         * @param {number[]} b - End point of the segment [x, y]
+         * @returns {number} Squared distance
+         */
+        function pointToLineSegmentSqDist(p, a, b) {
+            const l2 = getSqDist(a, b);
+            // If the segment is just a point
+            if (l2 === 0) return getSqDist(p, a);
+
+            // Calculate the projection parameter t
+            let t = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / l2;
+            // Clamp t to the range [0, 1] to stay within the segment
+            t = Math.max(0, Math.min(1, t));
+
+            // Calculate the coordinates of the projection point on the segment
+            const projection = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+            // Return the squared distance from the point to the projection
+            return getSqDist(p, projection);
+        }
+
+         /**
+         * Calculates the minimum distance from a point to a LineString (potentially multi-segment).
+         * @param {number[]} pointCoords - The point [x, y]
+         * @param {Array<number[]>} lineCoords - Array of points defining the LineString [[x1, y1], [x2, y2], ...]
+         * @returns {number} Minimum distance
+         */
+        function pointToLineStringDistance(pointCoords, lineCoords) {
+            let minSqDist = Infinity;
+            // Iterate through each segment of the LineString
+            for (let i = 0; i < lineCoords.length - 1; i++) {
+                const segmentSqDist = pointToLineSegmentSqDist(pointCoords, lineCoords[i], lineCoords[i + 1]);
+                if (segmentSqDist < minSqDist) {
+                    minSqDist = segmentSqDist;
+                }
+            }
+            // Return the actual distance (square root of the minimum squared distance)
+            return Math.sqrt(minSqDist);
+        }
+
+
+        // --- Interaction Logic (Using Manual Line Distance) ---
         function checkInteractions() {
             const matched = [];
             const near = [];
 
-            // Clear previous logs specific to this function call for clarity
-            // console.clear(); // Optional: uncomment to clear console on each move
-            console.log(`--- Checking interactions at [${currentPos[0]}, ${currentPos[1]}] ---`); // Log current position
+            console.log(`--- Checking interactions at [${currentPos[0]}, ${currentPos[1]}] ---`);
 
             if (!geojsonData || !geojsonData.features) {
                 console.log("No GeoJSON data loaded.");
                 return { matched, near };
             }
 
-            const userPoint = turf.point(currentPos);
+            const userPointCoords = currentPos; // Use raw coordinates for manual calculation
+            const userPointFeature = turf.point(userPointCoords); // Still needed for Turf functions
 
-            geojsonData.features.forEach((feature, index) => { // Added index for easier tracking
-                // Basic check for valid feature structure
+            geojsonData.features.forEach((feature, index) => {
                 if (!feature || !feature.geometry || !feature.geometry.type || !feature.geometry.coordinates) {
                      console.warn(`Skipping invalid feature at index ${index}:`, feature);
                      return;
@@ -195,75 +240,81 @@
                 let isMatched = false;
                 let isNear = false;
                 let minDistance = Infinity;
-                let calculationError = null; // Track errors during calculation
+                let calculationError = null;
 
-                // --- Start Debug Log for this feature ---
                 console.log(`[Feature ${index}] Name: "${featureName}", Type: ${feature.geometry.type}`);
 
                 try {
-                    // 1. Calculate minimum distance and check for exact match
                     switch (feature.geometry.type) {
                         case 'Point':
-                             // Check if coordinates are valid
                              if (!Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 2) {
                                  throw new Error("Invalid Point coordinates");
                              }
-                            minDistance = turf.distance(userPoint, feature.geometry);
-                            isMatched = minDistance < MATCH_TOLERANCE;
-                            break;
+                             // Use Turf for point-to-point distance
+                            minDistance = turf.distance(userPointFeature, feature.geometry, TURF_DISTANCE_OPTIONS);
+                            break; // End Point case
+
                         case 'LineString':
-                             // Check if coordinates are valid
                              if (!Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 2) {
-                                 throw new Error("Invalid LineString coordinates: requires at least 2 points");
+                                 throw new Error("Invalid LineString: requires at least 2 points");
                              }
-                             feature.geometry.coordinates.forEach(p => { // Check each point in the line
-                                 if (!Array.isArray(p) || p.length < 2) throw new Error("Invalid point within LineString coordinates");
+                             feature.geometry.coordinates.forEach(p => {
+                                 if (!Array.isArray(p) || p.length < 2) throw new Error("Invalid point within LineString");
                              });
-                            minDistance = turf.pointToLineDistance(userPoint, feature.geometry);
-                            isMatched = minDistance < MATCH_TOLERANCE;
-                            break;
+
+                             // *** USE MANUAL DISTANCE CALCULATION ***
+                             minDistance = pointToLineStringDistance(userPointCoords, feature.geometry.coordinates);
+                             break; // End LineString case
+
                         case 'Polygon':
-                             // Check if coordinates are valid (basic check for outer ring)
-                            if (!Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 1 || !Array.isArray(feature.geometry.coordinates[0]) || feature.geometry.coordinates[0].length < 4) {
+                            // ... (validation checks as before) ...
+                             if (!Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 1 || !Array.isArray(feature.geometry.coordinates[0]) || feature.geometry.coordinates[0].length < 4) {
                                  throw new Error("Invalid Polygon coordinates: requires outer ring with at least 4 points (first=last)");
                              }
                              feature.geometry.coordinates[0].forEach(p => { // Check each point in the outer ring
                                  if (!Array.isArray(p) || p.length < 2) throw new Error("Invalid point within Polygon coordinates");
                              });
-                             // Check if the first and last points of the outer ring are the same
                              const ring = feature.geometry.coordinates[0];
                              if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
-                                 console.warn(`Polygon "${featureName}" outer ring is not closed (first point != last point). Turf.js might handle this, but it's not standard GeoJSON.`);
+                                 console.warn(`Polygon "${featureName}" outer ring is not closed (first point != last point).`);
                              }
 
-                            isMatched = turf.booleanPointInPolygon(userPoint, feature.geometry, { ignoreBoundary: false });
+                            // Use Turf for point-in-polygon check
+                            isMatched = turf.booleanPointInPolygon(userPointFeature, feature.geometry, { ignoreBoundary: false });
                             if (isMatched) {
                                 minDistance = 0;
                             } else {
+                                // If outside, calculate distance to boundary using manual method
                                 const exteriorRing = feature.geometry.coordinates[0];
-                                const boundaryLine = turf.lineString(exteriorRing); // Create LineString from outer ring
-                                minDistance = turf.pointToLineDistance(userPoint, boundaryLine);
+                                minDistance = pointToLineStringDistance(userPointCoords, exteriorRing);
+                                // Note: This only checks exterior ring for simplicity.
+                                // A full polygon distance might need to check interior rings too.
                             }
-                            break;
+                            break; // End Polygon case
                          default:
-                              console.warn(`Unsupported geometry type "${feature.geometry.type}" for feature "${featureName}". Skipping distance calculation.`);
-                              minDistance = Infinity; // Cannot calculate distance
+                              console.warn(`Unsupported geometry type "${feature.geometry.type}" for feature "${featureName}".`);
+                              minDistance = Infinity;
+                    } // End switch
+
+                    // Check match based on calculated distance (unless already matched by booleanPointInPolygon)
+                    if (!isMatched) {
+                        isMatched = minDistance < MATCH_TOLERANCE;
                     }
 
-                    // 2. Check for proximity (near) based on calculated distance
+                    // Check for proximity (near) based on calculated distance
                     if (!isMatched && minDistance <= INTERACTION_RADIUS) {
                          isNear = true;
                     }
 
                 } catch (error) {
-                    console.error(`Error calculating distance/intersection for feature "${featureName}":`, error);
-                    calculationError = error.message; // Store error message
-                    minDistance = Infinity; // Ensure it's not considered near on error
+                    console.error(`Error during calculation for feature "${featureName}":`, error);
+                    calculationError = error.message;
+                    minDistance = Infinity;
                     isMatched = false;
                     isNear = false;
                 }
 
-                 // --- Log Results for this feature ---
+                 // Log final results for the feature
                  console.log(`  - Calculated minDistance: ${minDistance}`);
                  console.log(`  - Condition (minDistance < ${MATCH_TOLERANCE}): ${minDistance < MATCH_TOLERANCE} -> isMatched: ${isMatched}`);
                  console.log(`  - Condition (!isMatched && minDistance <= ${INTERACTION_RADIUS}): ${!isMatched && minDistance <= INTERACTION_RADIUS} -> isNear: ${isNear}`);
@@ -271,8 +322,6 @@
                      console.log(`  - Calculation Error: ${calculationError}`);
                  }
                  console.log(`  - Final Result: ${isMatched ? 'Matched' : (isNear ? 'Near' : 'Neither')}`);
-                 // --- End Debug Log ---
-
 
                 // Add to lists
                 if (isMatched) {
@@ -280,7 +329,7 @@
                 } else if (isNear) {
                     near.push(featureName);
                 }
-            });
+            }); // End forEach feature
 
              console.log(`--- Interaction check complete. Matched: ${matched.length}, Near: ${near.length} ---`);
             return { matched, near };
@@ -288,16 +337,15 @@
 
 
         // --- Display Update ---
-        function updateDisplay() {
+        function updateDisplay() { /* ... no changes ... */
             currentPosElement.textContent = `[${currentPos[0]}, ${currentPos[1]}]`;
-            // Perform checks and update lists
-            const { matched, near } = checkInteractions(); // This now logs details
+            const { matched, near } = checkInteractions();
             updateList(matchedListElement, matched);
             updateList(nearListElement, near);
-        }
+         }
 
-        function updateList(listElement, items) {
-            listElement.innerHTML = ''; // Clear previous items
+        function updateList(listElement, items) { /* ... no changes ... */
+             listElement.innerHTML = '';
             if (items.length === 0) {
                 listElement.innerHTML = '<li class="none">None</li>';
             } else {
@@ -307,11 +355,11 @@
                     listElement.appendChild(li);
                 });
             }
-        }
+         }
 
         // --- Utility Functions ---
-        function displayMessage(message, type = "info") {
-            messageAreaElement.textContent = message;
+        function displayMessage(message, type = "info") { /* ... no changes ... */
+             messageAreaElement.textContent = message;
             if (type === "error") {
                 console.error("Explorer Message:", message);
                 messageAreaElement.style.color = "red";
@@ -327,7 +375,7 @@
                      messageAreaElement.textContent = '';
                  }
              }, 5000);
-        }
+         }
 
 
         // --- Start the app ---
