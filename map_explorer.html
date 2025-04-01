@@ -70,14 +70,15 @@
 
     <script>
         // --- Configuration ---
-        const MAP_WIDTH = 200; // Still needed for bounds checking
+        const MAP_WIDTH = 200;
         const MAP_HEIGHT = 200;
-        const START_POS = [100, 100]; // Initial user position [x, y]
-        const INTERACTION_RADIUS = 1; // Radius for "near" check
+        const START_POS = [100, 100];
+        const INTERACTION_RADIUS = 1;
+        const MATCH_TOLERANCE = 0.01;
 
         // --- Global State ---
         let currentPos = [...START_POS];
-        let geojsonData = null; // To store loaded GeoJSON features
+        let geojsonData = null;
 
         // --- DOM Elements ---
         const currentPosElement = document.getElementById('current-pos');
@@ -85,7 +86,7 @@
         const nearListElement = document.getElementById('near-list');
         const fileInputElement = document.getElementById('geojson-file-input');
         const loadButtonElement = document.getElementById('load-geojson-button');
-        const messageAreaElement = document.getElementById('message-area'); // Message display element
+        const messageAreaElement = document.getElementById('message-area');
 
         // --- Sample GeoJSON Data ---
         const sampleGeoJson = {
@@ -99,38 +100,31 @@
           ]
         };
 
+
         // --- Initialization ---
         function init() {
-            // Load sample data initially
             loadGeoJson(sampleGeoJson);
-
-            // Add event listeners
             window.addEventListener('keydown', handleKeyPress);
             fileInputElement.addEventListener('change', handleFileLoad);
             loadButtonElement.addEventListener('click', () => {
-                fileInputElement.click(); // Trigger the file input
+                fileInputElement.click();
             });
-
-            // Initial display update
             updateDisplay();
+            console.log("Debug logging enabled in checkInteractions."); // Notify that logging is on
         }
 
         // --- GeoJSON Handling ---
         function handleFileLoad(event) {
             const file = event.target.files[0];
-            if (!file) {
-                return;
-            }
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const data = JSON.parse(e.target.result);
-                    // Basic validation
                     if (data && data.type === "FeatureCollection" && Array.isArray(data.features)) {
                          loadGeoJson(data);
-                         // Reset position to start when new data is loaded
-                         currentPos = [...START_POS];
-                         updateDisplay();
+                         currentPos = [...START_POS]; // Reset position
+                         updateDisplay(); // Update display after loading
                     } else {
                         displayMessage("Invalid GeoJSON file. Must be a FeatureCollection.", "error");
                     }
@@ -138,97 +132,147 @@
                      displayMessage("Error parsing GeoJSON file: " + error.message, "error");
                 }
             };
-            reader.onerror = function() {
-                 displayMessage("Error reading file.", "error");
-            };
+            reader.onerror = () => displayMessage("Error reading file.", "error");
             reader.readAsText(file);
         }
 
         function loadGeoJson(data) {
             geojsonData = data;
-            console.log("GeoJSON data loaded:", geojsonData);
-            displayMessage("GeoJSON data loaded successfully.", "success"); // Inform user
+            console.log("GeoJSON data loaded:", geojsonData); // Log loaded data for inspection
+            displayMessage("GeoJSON data loaded successfully.", "success");
         }
 
         // --- Navigation ---
         function handleKeyPress(event) {
             let moved = false;
+            const [x, y] = currentPos;
+
             switch (event.key) {
                 case 'ArrowUp':
-                    if (currentPos[1] < MAP_HEIGHT) {
-                        currentPos[1]++;
-                        moved = true;
-                    }
+                    if (y < MAP_HEIGHT) { currentPos[1]++; moved = true; }
                     break;
                 case 'ArrowDown':
-                     if (currentPos[1] > 0) {
-                        currentPos[1]--;
-                        moved = true;
-                    }
+                     if (y > 0) { currentPos[1]--; moved = true; }
                     break;
                 case 'ArrowLeft':
-                     if (currentPos[0] > 0) {
-                        currentPos[0]--;
-                        moved = true;
-                    }
+                     if (x > 0) { currentPos[0]--; moved = true; }
                     break;
                 case 'ArrowRight':
-                    if (currentPos[0] < MAP_WIDTH) {
-                        currentPos[0]++;
-                        moved = true;
-                    }
+                    if (x < MAP_WIDTH) { currentPos[0]++; moved = true; }
                     break;
             }
 
             if (moved) {
-                event.preventDefault(); // Prevent default arrow key scrolling
+                event.preventDefault();
                 updateDisplay();
             }
         }
 
-        // --- Interaction Logic ---
+        // --- Interaction Logic (with Debug Logging) ---
         function checkInteractions() {
             const matched = [];
             const near = [];
 
+            // Clear previous logs specific to this function call for clarity
+            // console.clear(); // Optional: uncomment to clear console on each move
+            console.log(`--- Checking interactions at [${currentPos[0]}, ${currentPos[1]}] ---`); // Log current position
+
             if (!geojsonData || !geojsonData.features) {
+                console.log("No GeoJSON data loaded.");
                 return { matched, near };
             }
 
             const userPoint = turf.point(currentPos);
-            // Create a conceptual circle polygon for intersection checks
-            const userCircle = turf.circle(userPoint, INTERACTION_RADIUS, {steps: 32}); // Using turf.circle
 
-            geojsonData.features.forEach(feature => {
-                const featureName = feature.properties?.name || 'Unnamed Feature';
+            geojsonData.features.forEach((feature, index) => { // Added index for easier tracking
+                // Basic check for valid feature structure
+                if (!feature || !feature.geometry || !feature.geometry.type || !feature.geometry.coordinates) {
+                     console.warn(`Skipping invalid feature at index ${index}:`, feature);
+                     return;
+                }
+
+                const featureName = feature.properties?.name || `Unnamed Feature ${index}`;
                 let isMatched = false;
                 let isNear = false;
+                let minDistance = Infinity;
+                let calculationError = null; // Track errors during calculation
+
+                // --- Start Debug Log for this feature ---
+                console.log(`[Feature ${index}] Name: "${featureName}", Type: ${feature.geometry.type}`);
 
                 try {
-                    // 1. Check for exact match (using small tolerance)
-                    const tolerance = 0.01; // How close is considered "on" or "at"
+                    // 1. Calculate minimum distance and check for exact match
                     switch (feature.geometry.type) {
                         case 'Point':
-                            isMatched = turf.distance(userPoint, feature.geometry) < tolerance;
+                             // Check if coordinates are valid
+                             if (!Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 2) {
+                                 throw new Error("Invalid Point coordinates");
+                             }
+                            minDistance = turf.distance(userPoint, feature.geometry);
+                            isMatched = minDistance < MATCH_TOLERANCE;
                             break;
                         case 'LineString':
-                            isMatched = turf.pointToLineDistance(userPoint, feature.geometry) < tolerance;
+                             // Check if coordinates are valid
+                             if (!Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 2) {
+                                 throw new Error("Invalid LineString coordinates: requires at least 2 points");
+                             }
+                             feature.geometry.coordinates.forEach(p => { // Check each point in the line
+                                 if (!Array.isArray(p) || p.length < 2) throw new Error("Invalid point within LineString coordinates");
+                             });
+                            minDistance = turf.pointToLineDistance(userPoint, feature.geometry);
+                            isMatched = minDistance < MATCH_TOLERANCE;
                             break;
                         case 'Polygon':
+                             // Check if coordinates are valid (basic check for outer ring)
+                            if (!Array.isArray(feature.geometry.coordinates) || feature.geometry.coordinates.length < 1 || !Array.isArray(feature.geometry.coordinates[0]) || feature.geometry.coordinates[0].length < 4) {
+                                 throw new Error("Invalid Polygon coordinates: requires outer ring with at least 4 points (first=last)");
+                             }
+                             feature.geometry.coordinates[0].forEach(p => { // Check each point in the outer ring
+                                 if (!Array.isArray(p) || p.length < 2) throw new Error("Invalid point within Polygon coordinates");
+                             });
+                             // Check if the first and last points of the outer ring are the same
+                             const ring = feature.geometry.coordinates[0];
+                             if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) {
+                                 console.warn(`Polygon "${featureName}" outer ring is not closed (first point != last point). Turf.js might handle this, but it's not standard GeoJSON.`);
+                             }
+
                             isMatched = turf.booleanPointInPolygon(userPoint, feature.geometry, { ignoreBoundary: false });
+                            if (isMatched) {
+                                minDistance = 0;
+                            } else {
+                                const exteriorRing = feature.geometry.coordinates[0];
+                                const boundaryLine = turf.lineString(exteriorRing); // Create LineString from outer ring
+                                minDistance = turf.pointToLineDistance(userPoint, boundaryLine);
+                            }
                             break;
-                         // Add checks for MultiPoint, MultiLineString, MultiPolygon if needed
+                         default:
+                              console.warn(`Unsupported geometry type "${feature.geometry.type}" for feature "${featureName}". Skipping distance calculation.`);
+                              minDistance = Infinity; // Cannot calculate distance
                     }
 
-                    // 2. Check for proximity (near) if not already matched
-                    if (!isMatched) {
-                         isNear = turf.booleanIntersects(userCircle, feature);
+                    // 2. Check for proximity (near) based on calculated distance
+                    if (!isMatched && minDistance <= INTERACTION_RADIUS) {
+                         isNear = true;
                     }
 
                 } catch (error) {
-                    console.error(`Error processing feature "${featureName}":`, error);
-                    displayMessage(`Error checking feature: ${featureName}`, "error");
+                    console.error(`Error calculating distance/intersection for feature "${featureName}":`, error);
+                    calculationError = error.message; // Store error message
+                    minDistance = Infinity; // Ensure it's not considered near on error
+                    isMatched = false;
+                    isNear = false;
                 }
+
+                 // --- Log Results for this feature ---
+                 console.log(`  - Calculated minDistance: ${minDistance}`);
+                 console.log(`  - Condition (minDistance < ${MATCH_TOLERANCE}): ${minDistance < MATCH_TOLERANCE} -> isMatched: ${isMatched}`);
+                 console.log(`  - Condition (!isMatched && minDistance <= ${INTERACTION_RADIUS}): ${!isMatched && minDistance <= INTERACTION_RADIUS} -> isNear: ${isNear}`);
+                 if (calculationError) {
+                     console.log(`  - Calculation Error: ${calculationError}`);
+                 }
+                 console.log(`  - Final Result: ${isMatched ? 'Matched' : (isNear ? 'Near' : 'Neither')}`);
+                 // --- End Debug Log ---
+
 
                 // Add to lists
                 if (isMatched) {
@@ -238,20 +282,16 @@
                 }
             });
 
+             console.log(`--- Interaction check complete. Matched: ${matched.length}, Near: ${near.length} ---`);
             return { matched, near };
         }
 
 
         // --- Display Update ---
         function updateDisplay() {
-            // Update coordinate display
             currentPosElement.textContent = `[${currentPos[0]}, ${currentPos[1]}]`;
-
-            // NO DRAWING - Canvas removed
-
-            // Check interactions and update lists
-            const { matched, near } = checkInteractions();
-
+            // Perform checks and update lists
+            const { matched, near } = checkInteractions(); // This now logs details
             updateList(matchedListElement, matched);
             updateList(nearListElement, near);
         }
@@ -259,7 +299,6 @@
         function updateList(listElement, items) {
             listElement.innerHTML = ''; // Clear previous items
             if (items.length === 0) {
-                // Use a class for styling 'None' item
                 listElement.innerHTML = '<li class="none">None</li>';
             } else {
                 items.forEach(item => {
@@ -272,7 +311,6 @@
 
         // --- Utility Functions ---
         function displayMessage(message, type = "info") {
-             // Display message in the dedicated message area
             messageAreaElement.textContent = message;
             if (type === "error") {
                 console.error("Explorer Message:", message);
@@ -284,10 +322,11 @@
                  console.log("Explorer Info:", message);
                  messageAreaElement.style.color = "black";
             }
-             // Clear message after a delay
              setTimeout(() => {
-                 messageAreaElement.textContent = '';
-             }, 5000); // Clear after 5 seconds
+                 if (messageAreaElement.textContent === message) {
+                     messageAreaElement.textContent = '';
+                 }
+             }, 5000);
         }
 
 
