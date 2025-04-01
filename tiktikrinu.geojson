@@ -1,0 +1,33 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": { "name": "Center Point" },
+        "geometry": { "type": "Point", "coordinates": [100, 100] }
+      },
+      {
+        "type": "Feature",
+        "properties": { "name": "Diagonal Line" },
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [ [10, 10], [50, 50], [50, 90] ]
+        }
+      },
+      {
+          "type": "Feature",
+          "properties": { "name": "Corner Square" },
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [ [150, 150], [190, 150], [190, 190], [150, 190], [150, 150] ]
+            ]
+          }
+        },
+        {
+          "type": "Feature",
+          "properties": { "name": "Another Point" },
+          "geometry": { "type": "Point", "coordinates": [155, 155] }
+        }
+    ]
+  }

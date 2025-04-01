@@ -1,0 +1,94 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {"name": "Musu"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[6.88, 183.94], [40.15, 42.17], [69.57, 43.88], [97.31, 42.39], [131.3, 38.11], [159.72, 31.36], [186.49, 117.24], [154.62, 132.22], [66.01, 164.88], [6.88, 183.94]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "zemelapio vakarine riba"},
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[0, 0], [0, 200]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "Žemėlapio šiaurinė riba"},
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[0, 200], [200, 200]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "Žemėlapio rytinė riba"},
+        "geometry": {
+          "type": "LineString",
+          "coordinates": [[200, 0], [200, 200]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "Egle"},
+        "geometry": {
+          "type": "Point",
+          "coordinates": [[10, 10]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "Neringos"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[-40.52, 198.46], [6.89, 183.98], [40.15, 42.15], [12.9, 40.06], [-45.63, 32.55], [-40.52, 198.46]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "Kaimyno"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[186.49, 117.24], [159.72, 31.36], [171.46, 24.48], [197.55, 10.06], [206.39, 3.36], [210.02, 105.38], [186.49, 117.24]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "Ežeras"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[-45.63, 32.55], [-33.4, -81.74], [204.16, -73.92], [206.39, 3.36], [197.55, 10.06], [171.46, 24.48], [159.72, 31.36], [131.3, 38.11], [97.31, 42.39], [69.57, 43.88], [40.15, 42.15], [12.9, 40.06], [-45.63, 32.55]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "Vyžintų žemė"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[-53.3, 221.48], [50.8, 189.31], [108.0, 169.39], [196.11, 250.81], [16.7, 336.36], [-53.3, 221.48]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "Kažkieno sklypas"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[196.11, 250.81], [108.0, 169.39], [168.37, 146.22], [218.96, 121.02], [249.86, 221.36], [196.11, 250.81]]]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {"name": "Valstybinė žemė"},
+        "geometry": {
+          "type": "Polygon",
+          "coordinates": [[[-53.3, 221.48], [-40.52, 198.46], [6.89, 183.98], [66.01, 164.88], [154.62, 132.22], [186.49, 117.24], [210.02, 105.38], [218.96, 121.02], [168.37, 146.22], [108.0, 169.39], [50.8, 189.31], [-53.3, 221.48]]]
+        }
+      }
+    ]
+  }
+  

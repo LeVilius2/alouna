@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GeoJSON Text Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Basic styling for better readability */
+        body {
+            font-family: 'Inter', sans-serif; /* Use Inter font */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f3f4f6; /* Light gray background */
+        }
+        .container {
+            background-color: white;
+            padding: 2rem; /* Increased padding */
+            border-radius: 0.75rem; /* More rounded corners */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+            width: 90%;
+            max-width: 600px; /* Max width for larger screens */
+        }
+        h1, h2 {
+            color: #1f2937; /* Darker gray heading */
+            margin-bottom: 1rem; /* Space below headings */
+        }
+        pre {
+            background-color: #e5e7eb; /* Lighter gray for code blocks */
+            padding: 1rem;
+            border-radius: 0.5rem; /* Rounded corners for code blocks */
+            margin-bottom: 1rem; /* Space below code blocks */
+            white-space: pre-wrap; /* Wrap long lines */
+            word-wrap: break-word;
+            font-family: 'Monospace', monospace; /* Monospace font for coordinates/lists */
+            min-height: 3em; /* Minimum height for lists */
+        }
+        .instructions {
+            font-size: 0.875rem; /* Smaller text for instructions */
+            color: #6b7280; /* Medium gray text */
+            margin-top: 1.5rem; /* Space above instructions */
+        }
+        .coords {
+            font-weight: bold;
+            color: #1d4ed8; /* Blue color for coordinates */
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container">
+        <h1 class="text-2xl font-bold text-center">GeoJSON Text Explorer</h1>
+
+        <div class="mb-4">
+            <h2 class="text-lg font-semibold">Your Position:</h2>
+            <pre id="coords-display" class="coords">(100, 100)</pre>
+        </div>
+
+        <div class="mb-4">
+            <h2 class="text-lg font-semibold">Objects On:</h2>
+            <pre id="on-display">None</pre>
+        </div>
+
+        <div>
+            <h2 class="text-lg font-semibold">Objects Near (within 1 unit):</h2>
+            <pre id="near-display">None</pre>
+        </div>
+
+        <p class="instructions">
+            Use Arrow Keys (↑, ↓, ←, →) to move. <br>
+            Ensure 'data.geojson' is in the same directory as this HTML file.
+        </p>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const MAP_SIZE = 200;
+        const START_X = 100;
+        const START_Y = 100;
+        const PROXIMITY_RADIUS = 1.0;
+        const EPSILON = 1e-6; // Small tolerance for floating point comparisons
+
+        // --- State ---
+        let currentX = START_X;
+        let currentY = START_Y;
+        let features = []; // To store loaded GeoJSON features
+
+        // --- DOM Elements ---
+        const coordsDisplay = document.getElementById('coords-display');
+        const onDisplay = document.getElementById('on-display');
+        const nearDisplay = document.getElementById('near-display');
+
+        // --- Geometry Helper Functions ---
+
+        /**
+         * Calculates the squared Euclidean distance between two points.
+         * Using squared distance avoids Math.sqrt for simple comparisons.
+         * @param {Array<number>} p1 - First point [x, y]
+         * @param {Array<number>} p2 - Second point [x, y]
+         * @returns {number} Squared distance
+         */
+        function distSq(p1, p2) {
+            const dx = p1[0] - p2[0];
+            const dy = p1[1] - p2[1];
+            return dx * dx + dy * dy;
+        }
+
+        /**
+         * Calculates the distance between two points.
+         * @param {Array<number>} p1 - First point [x, y]
+         * @param {Array<number>} p2 - Second point [x, y]
+         * @returns {number} Distance
+         */
+        function distance(p1, p2) {
+            return Math.sqrt(distSq(p1, p2));
+        }
+
+        /**
+         * Calculates the shortest distance from a point to a line segment.
+         * @param {Array<number>} p - The point [x, y]
+         * @param {Array<number>} a - Start point of the segment [x, y]
+         * @param {Array<number>} b - End point of the segment [x, y]
+         * @returns {number} The shortest distance from p to segment ab
+         */
+        function pointSegmentDistance(p, a, b) {
+            const l2 = distSq(a, b);
+            // If the segment has zero length, return distance to the point
+            if (l2 < EPSILON) return distance(p, a);
+
+            // Parameter t represents the projection of p onto the line ab
+            // t = [(p - a) . (b - a)] / |b - a|^2
+            let t = ((p[0] - a[0]) * (b[0] - a[0]) + (p[1] - a[1]) * (b[1] - a[1])) / l2;
+
+            // Clamp t to the range [0, 1] to stay within the segment
+            t = Math.max(0, Math.min(1, t));
+
+            // Calculate the projection point (closest point on the infinite line)
+            const projection = [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
+
+            // Return the distance between the point and its projection onto the segment
+            return distance(p, projection);
+        }
+
+
+        /**
+         * Checks if a point is inside a polygon using the Ray Casting algorithm.
+         * Handles polygons with holes if the GeoJSON format supports them (this basic version assumes simple polygons).
+         * @param {Array<number>} point - The point to check [x, y]
+         * @param {Array<Array<number>>} polygonVertices - Array of vertices [[x1, y1], [x2, y2], ...] for the outer ring.
+         * @returns {boolean} True if the point is inside, false otherwise.
+         */
+        function isInsidePolygon(point, polygonVertices) {
+            const x = point[0], y = point[1];
+            let isInside = false;
+
+            // Iterate through each edge of the polygon
+            for (let i = 0, j = polygonVertices.length - 1; i < polygonVertices.length; j = i++) {
+                const xi = polygonVertices[i][0], yi = polygonVertices[i][1];
+                const xj = polygonVertices[j][0], yj = polygonVertices[j][1];
+
+                // Check if the point is exactly on a vertex
+                if ((xi === x && yi === y)) {
+                    return true; // Point is a vertex
+                }
+
+                 // Check if the point is on a horizontal edge - treat as inside
+                if (((yi === yj && yi === y) && (x >= Math.min(xi, xj) && x <= Math.max(xi, xj)))) {
+                     return true;
+                }
+                // Check if the point is on a vertical edge - treat as inside
+                if (((xi === xj && xi === x) && (y >= Math.min(yi, yj) && y <= Math.max(yi, yj)))) {
+                     return true;
+                }
+
+                // The core ray casting check
+                const intersect = ((yi > y) !== (yj > y))
+                    && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+
+                if (intersect) {
+                    isInside = !isInside;
+                }
+            }
+
+            return isInside;
+        }
+
+        // --- Interaction Check ---
+
+        /**
+         * Checks the user's current position against all loaded GeoJSON features.
+         * @returns {object} An object with two arrays: { on: [names], near: [names] }
+         */
+        function checkInteractions() {
+            const onObjects = new Set(); // Use Set to avoid duplicate names
+            const nearObjects = new Set();
+            const currentPoint = [currentX, currentY];
+            const proximityRadiusSq = PROXIMITY_RADIUS * PROXIMITY_RADIUS; // Use squared radius
+
+            features.forEach(feature => {
+                const name = feature.properties.name || 'Unnamed Feature';
+                const geometry = feature.geometry;
+                let isOn = false;
+                let isNear = false;
+
+                if (!geometry || !geometry.type || !geometry.coordinates) {
+                    console.warn("Skipping feature with invalid geometry:", feature);
+                    return; // Skip features with invalid geometry
+                }
+
+                try { // Add try-catch for robustness against malformed coordinates
+                    switch (geometry.type) {
+                        case 'Point':
+                            const pointCoords = geometry.coordinates;
+                            const dSqPoint = distSq(currentPoint, pointCoords);
+                            if (dSqPoint < EPSILON) { // Check if exactly on the point (within tolerance)
+                                isOn = true;
+                                isNear = true; // If on, it's also near
+                            } else if (dSqPoint <= proximityRadiusSq) { // Check if near
+                                isNear = true;
+                            }
+                            break;
+
+                        case 'LineString':
+                            const lineCoords = geometry.coordinates;
+                            let minDistSqLine = Infinity;
+                            for (let i = 0; i < lineCoords.length - 1; i++) {
+                                const segmentDist = pointSegmentDistance(currentPoint, lineCoords[i], lineCoords[i + 1]);
+                                const segmentDistSq = segmentDist * segmentDist;
+
+                                if (segmentDistSq < EPSILON) { // Check if exactly on the segment
+                                    isOn = true;
+                                    // No need to check further segments if already on
+                                }
+                                minDistSqLine = Math.min(minDistSqLine, segmentDistSq);
+                            }
+                             // If on any segment, it's considered 'on' the LineString
+                            if (isOn) {
+                                isNear = true; // If on, it's also near
+                            } else if (minDistSqLine <= proximityRadiusSq) { // Check if near any segment
+                                isNear = true;
+                            }
+                            break;
+
+                        case 'Polygon':
+                            // Assuming simple polygons (first element of coordinates is the outer ring)
+                            const polygonRings = geometry.coordinates;
+                             if (!polygonRings || polygonRings.length === 0) break; // Skip empty polygons
+
+                            const outerRing = polygonRings[0];
+                            if (!Array.isArray(outerRing) || outerRing.length < 3) break; // Need at least 3 vertices
+
+                            // 1. Check if inside the polygon
+                            if (isInsidePolygon(currentPoint, outerRing)) {
+                                isOn = true;
+                                isNear = true; // If inside, it's also near
+                            } else {
+                                // 2. If not inside, check proximity to edges
+                                let minDistSqPoly = Infinity;
+                                for (let i = 0; i < outerRing.length - 1; i++) {
+                                     // Vertices loop back: last connects to first, hence outerRing.length - 1
+                                    const segmentDist = pointSegmentDistance(currentPoint, outerRing[i], outerRing[i + 1]);
+                                    minDistSqPoly = Math.min(minDistSqPoly, segmentDist * segmentDist);
+                                }
+                                if (minDistSqPoly <= proximityRadiusSq) {
+                                    isNear = true;
+                                }
+                            }
+                            // Note: This doesn't handle polygon holes.
+                            break;
+                         default:
+                             console.warn(`Unsupported geometry type: ${geometry.type}`);
+                    }
+                } catch (error) {
+                     console.error(`Error processing feature "${name}":`, error, feature);
+                }
+
+
+                // Add name to the appropriate list(s)
+                if (isOn) {
+                    onObjects.add(name);
+                }
+                // Add to near list if near *but not* already on (to avoid listing twice implicitly)
+                // Or, if you want 'near' to include 'on', remove the !isOn check
+                 if (isNear) {
+                    nearObjects.add(name);
+                }
+            });
+
+            return {
+                on: Array.from(onObjects),
+                near: Array.from(nearObjects) // Return all near objects, including those also 'on'
+                // near: Array.from(nearObjects).filter(n => !onObjects.has(n)) // Alternative: only list near if *not* on
+            };
+        }
+
+
+        // --- UI Update ---
+
+        /**
+         * Updates the display elements (coordinates, on list, near list).
+         */
+        function updateDisplay() {
+            // Update coordinates display
+            coordsDisplay.textContent = `(${currentX.toFixed(0)}, ${currentY.toFixed(0)})`; // Show integer coords
+
+            // Check interactions and update lists
+            const interactions = checkInteractions();
+
+            onDisplay.textContent = interactions.on.length > 0 ? interactions.on.join('\n') : 'None';
+            nearDisplay.textContent = interactions.near.length > 0 ? interactions.near.join('\n') : 'None';
+        }
+
+        // --- Event Handling ---
+
+        /**
+         * Handles keydown events for navigation.
+         * @param {KeyboardEvent} event - The keyboard event object.
+         */
+        function handleKeyDown(event) {
+            let moved = false;
+            switch (event.key) {
+                case 'ArrowUp':
+                    currentY = Math.max(0, currentY - 1); // Y decreases upwards in typical screen coords
+                    moved = true;
+                    break;
+                case 'ArrowDown':
+                    currentY = Math.min(MAP_SIZE, currentY + 1); // Y increases downwards
+                    moved = true;
+                    break;
+                case 'ArrowLeft':
+                    currentX = Math.max(0, currentX - 1);
+                    moved = true;
+                    break;
+                case 'ArrowRight':
+                    currentX = Math.min(MAP_SIZE, currentX + 1);
+                    moved = true;
+                    break;
+            }
+
+            if (moved) {
+                event.preventDefault(); // Prevent default arrow key scrolling
+                updateDisplay(); // Update the display after moving
+            }
+        }
+
+        // --- Initialization ---
+
+        /**
+         * Initializes the application: fetches data, sets up event listeners, and performs the initial display update.
+         */
+        async function init() {
+            try {
+                const response = await fetch('data.geojson');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                // Basic validation of GeoJSON structure
+                if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+                     features = data.features;
+                     console.log(`Loaded ${features.length} features.`);
+                } else {
+                    throw new Error('Invalid GeoJSON format. Expected FeatureCollection.');
+                }
+
+            } catch (error) {
+                console.error('Error loading or parsing data.geojson:', error);
+                onDisplay.textContent = 'Error loading data!';
+                nearDisplay.textContent = 'Error loading data!';
+                // Display error to user in a more prominent way if needed
+                 alert(`Failed to load 'data.geojson'. Please ensure the file exists in the same directory and is valid GeoJSON.\nError: ${error.message}`);
+                 return; // Stop initialization if data loading fails
+            }
+
+            // Add keyboard listener
+            document.addEventListener('keydown', handleKeyDown);
+
+            // Initial display update
+            updateDisplay();
+
+            console.log("GeoJSON Explorer Initialized. Use arrow keys to move.");
+        }
+
+        // Start the application
+        init();
+
+    </script>
+</body>
+</html>
