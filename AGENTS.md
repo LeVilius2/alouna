@@ -39,6 +39,10 @@ before deviating.
 Requires Node ≥ 24.19 (24 LTS, see `.nvmrc`) and pnpm 12.15.0 (see `packageManager`).
 TypeScript 7 supplies `tsc`; Microsoft's TypeScript 6 API compatibility alias is used
 by typescript-eslint until its native-compiler API support is ready.
+pnpm 12 records its own version in a leading lockfile document. When updating the
+package-manager pin, regenerate and commit that metadata too. Release verification
+must enforce the pin (`--config.pmOnFail=error`); the managed host can otherwise
+default to `pmOnFail=ignore` and hide errors that CI catches.
 
 ```
 pnpm install
