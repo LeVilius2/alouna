@@ -31,7 +31,9 @@ before deviating.
 - Secrets (Supabase keys) only via `.env` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`); commit a `.env.example`, never `.env`.
 
 ## Commands
+
 Requires Node ≥ 20 (22 recommended, see `.nvmrc`) and pnpm 9 (`corepack enable`).
+
 ```
 pnpm install
 pnpm dev         # web app on http://localhost:5173 (also on LAN for phone testing; GPS/compass need HTTPS on a phone)
@@ -41,6 +43,7 @@ pnpm lint        # eslint + prettier --check
 pnpm format      # prettier --write
 pnpm build       # production build -> apps/web/dist
 ```
+
 CI (`.github/workflows/ci.yml`) runs lint, typecheck, test and build on every push/PR.
 
 ## Progress
@@ -61,6 +64,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, test and build on every pu
 _(agents: append milestone notes here)_
 
 ### M0 (done)
+
 - pnpm monorepo: `packages/core` (pure TS, consumed as source – no build step) and `apps/web` (Vite + React + React Router, PWA via vite-plugin-pwa).
 - Routes: `/` (mode chooser), `/navigate` and `/editor` (placeholders), `*` (not found). Router defined in `apps/web/src/router.tsx`; tests use `createMemoryRouter(routes)`.
 - `packages/core/src/geo/sphere.ts`: `distanceMeters`, `bearingDegrees`, `normalizeDegrees`, `signedAngleDiff` (+ tests). Coordinates are `[lon, lat]`.
