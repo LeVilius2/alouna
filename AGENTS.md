@@ -110,3 +110,39 @@ _(agents: append milestone notes here)_
 - Web deployment verified at `https://alouna.leveris.lt`: healthy container, trusted
   HTTPS, redirects, SPA/PWA files and local/live build hashes. Deploy manually in
   Coolify after GitHub CI passes. Supabase is not provisioned yet.
+
+### M2 (implemented; owner sign-in verification pending)
+
+- PostGIS schema, active admin/walker membership, RLS, private helper schema and
+  versioned RPCs are live on the VPS. Direct feature/rule/profile writes are
+  revoked; actor checks, receipts and entity locks protect offline retries and
+  concurrent creation. Pending walker moves/deletions preserve the last approved
+  routing snapshot. See `docs/DATA.md`.
+- Six legacy features imported; only Our plot is an enabled walkable plot. The
+  self-intersecting Other plot is preserved in `alouna_private.seed_rejections`,
+  unavailable for routing. Source GeoJSON is untouched; seed metadata lives in
+  `supabase/seed/legacy-map.json`.
+- IndexedDB account/backend isolation, persistent queue, conflict blocking,
+  fail-closed validation and full-version tile caching. `fake-indexeddb` is a
+  test-only dependency for actual IndexedDB transaction/persistence checks.
+- Owner auth override: email/password, following the SMTP-free implementation in
+  `taskwardly-research`; magic links/SMTP are superseded. Signup/phone/anonymous
+  access are disabled. Account provisioning is private and interactive via
+  `scripts/create-member.py`; the owner enters new passwords personally.
+- Supabase Coolify service `y9unof4mljl5gzdcscwbqzjs`, no public domains/host ports.
+  Only Kong joins the existing web network. Web proxies Auth/REST/Realtime under
+  `/supabase`; Studio, Auth administration and other gateway paths are blocked.
+- Full database backups run from `/etc/cron.d/alouna-database-backup` at 01:00 UTC,
+  retaining 14 copies / 14 days / 2 GB in `/data/coolify/backups/alouna` (0700/0600).
+  Restore plus RLS checks passed in a separate database, then that database was
+  removed. The GraphQL wrapper companion is required with each dump. Coolify's
+  native backup schedule is **disabled** because it strips ownership/ACLs; do not
+  re-enable it as a replacement. No off-site destination/failure alert is configured.
+- Latest policy-eligible project packages checked. The supported Coolify Supabase
+  bundle retains its tested component pins (Postgres 15); do not upgrade individual
+  images blindly. SQL is also tested on Postgres 17/PostGIS in CI.
+- Local lint/typecheck/tests/build and SQL ownership/review/idempotency/concurrency
+  checks pass; live anonymous data access is denied, trusted HTTPS and asset hashes
+  verified. Existing PWA tabs may need one reload after their service worker updates.
+  Remaining: owner completes the private password prompt/sign-in, then verify the
+  authenticated feature list and an offline browser reload before ticking M2.

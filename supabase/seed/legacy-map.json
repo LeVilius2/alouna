@@ -1,0 +1,45 @@
+{
+  "Musu": {
+    "name": "Our plot",
+    "category": "walkable_area",
+    "enabled": true,
+    "owner": "Ours"
+  },
+  "Neringos": {
+    "name": "Neringa's plot",
+    "category": "walkable_area",
+    "enabled": false,
+    "owner": "Neringa"
+  },
+  "Kaimyno": {
+    "name": "Neighbour's plot",
+    "category": "walkable_area",
+    "enabled": false,
+    "owner": "Neighbour"
+  },
+  "Ežeras": {
+    "name": "Lake",
+    "category": "water",
+    "enabled": true,
+    "owner": ""
+  },
+  "Vyžintų žemė": {
+    "name": "Vyžintai land",
+    "category": "walkable_area",
+    "enabled": false,
+    "owner": "Vyžintai"
+  },
+  "Kažkieno sklypas": {
+    "name": "Other plot",
+    "category": "walkable_area",
+    "enabled": false,
+    "owner": "Other",
+    "quarantined": true
+  },
+  "Valstybinė žemė": {
+    "name": "State land",
+    "category": "walkable_area",
+    "enabled": false,
+    "owner": "State"
+  }
+}

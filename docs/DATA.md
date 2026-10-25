@@ -41,8 +41,9 @@ and presence are M6 work.
 ## Legacy seed
 
 Run `pnpm seed:generate`, then apply `supabase/seed/seed.sql`. `pnpm seed:check`
-checks deterministic generation against the retained, unchanged GeoJSON and core
-rules. Reapplying the seed does not overwrite existing features or custom rules.
+checks deterministic generation against the retained, unchanged GeoJSON,
+`supabase/seed/legacy-map.json` and core rules. The browser validator also tests
+the accepted seed polygons, including disabled neighbours. Reapplying the seed does not overwrite existing features or custom rules.
 Only Our plot is initially enabled as a walkable plot; the lake is an enabled
 water hazard. Other valid plots are retained, disabled, for later review. The four
 old map-boundary lines are viewport metadata and are omitted.
