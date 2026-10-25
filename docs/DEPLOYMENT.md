@@ -50,5 +50,17 @@ database ports private. Only the authenticated API gateway should be exposed ove
 - Auth, Realtime, RLS and offline synchronization must be verified against this
   self-hosted instance, rather than relying solely on managed Supabase behavior.
 
-M1 adds the container configuration. It does **not** provision Supabase or claim a
-production deployment; record the deployed commit and public checks after deployment.
+## M1 deployment (25 October 2026)
+
+The web app is deployed at **https://alouna.leveris.lt** in the Coolify project
+**Alouna**, application **Alouna web**. The container healthcheck uses port 80 and
+`/healthz`. Hostinger's `alouna` A record points to the verified VPS address with
+TTL 60. Deployments are **manual** in Coolify; GitHub pushes run CI. No deployment
+webhook or additional credentials were created.
+
+The M1 release passed lint, typecheck, 36 tests and the production build, including
+GitHub CI. Public probes verified TLS trust, HTTP-to-HTTPS redirection, health,
+the `/`, `/editor`, `/navigate` SPA routes, PWA files and exact local/live asset hashes.
+The browser renders the app shell and placeholder routes. The navigator/editor
+features and field validation remain later milestones. **Supabase is not provisioned
+yet**; its self-hosted schema/data layer is next (M2).

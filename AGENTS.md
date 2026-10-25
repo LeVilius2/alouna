@@ -84,7 +84,7 @@ _(agents: append milestone notes here)_
   for **both the web app and Supabase**. Web hostname: `alouna.leveris.lt`.
   `Dockerfile` + `deploy/nginx.conf` replace Netlify/Pages configuration. See
   `docs/DEPLOYMENT.md`. Supabase provisioning/schema remain M2 work.
-- Versions deviate from the plan's "React 18": the current React 19 / React Router 8 / Vite 8 / Vitest 5 are used.
+- Current stack: React 19 / React Router 8 / Vite 8 / Vitest 5.
 - Dependency updates: TypeScript 7 + official TS6 compatibility alias, jsdom 30,
   Node 24 LTS and pnpm 12.15.0. Do not restore the superseded TS6/jsdom26 pins.
 - Playwright smoke tests are deferred until there are real screens (M3/M5).
@@ -107,3 +107,6 @@ _(agents: append milestone notes here)_
   footprints are conservative; endpoint snapping returns notices and has a distance cap.
 - VPS Dockerfile/nginx deployment replaces Pages; Supabase self-hosting is recorded
   for M2. Dependencies updated, with the official TS6 API adapter needed by ESLint.
+- Web deployment verified at `https://alouna.leveris.lt`: healthy container, trusted
+  HTTPS, redirects, SPA/PWA files and local/live build hashes. Deploy manually in
+  Coolify after GitHub CI passes. Supabase is not provisioned yet.
