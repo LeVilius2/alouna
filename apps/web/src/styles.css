@@ -105,3 +105,49 @@ a {
   outline: 3px solid #ffd60a;
   outline-offset: 3px;
 }
+
+.data-panel {
+  max-width: 680px;
+  margin-top: 32px;
+  padding: 20px;
+  border-radius: 16px;
+  background: var(--surface);
+}
+.data-panel .stack {
+  margin-top: 0;
+}
+.data-panel input {
+  min-height: 52px;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  background: var(--surface);
+  color: #fff;
+  padding: 12px;
+  font: inherit;
+}
+.data-panel li {
+  margin: 8px 0;
+}
+.data-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.control-button {
+  min-height: 52px;
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  padding: 12px 20px;
+  cursor: pointer;
+}
+.control-button--secondary {
+  background: transparent;
+}
+.control-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

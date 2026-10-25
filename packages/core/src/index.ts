@@ -10,3 +10,4 @@ export * from './routing/smooth';
 export * from './routing/events';
 export * from './routing/router';
 export * from './routing/worker-protocol';
+export { validateMap, validateProjectedPolygons } from './routing/validation';

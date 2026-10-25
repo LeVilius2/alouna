@@ -19,4 +19,31 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm seed:check
       - run: pnpm build
+  database:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_PASSWORD: test-only
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: test-only
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Apply schema and test RLS against real PostgreSQL
+        run: |
+          createdb --template=template0 alouna_test
+          export PGDATABASE=alouna_test
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/0001_init.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/seed/seed.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/seed/seed.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/rls.sql

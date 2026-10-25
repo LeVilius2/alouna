@@ -7,6 +7,8 @@
     "node": ">=24.19.0"
   },
   "scripts": {
+    "seed:generate": "node scripts/generate-seed.mjs",
+    "seed:check": "node scripts/generate-seed.mjs --check",
     "dev": "pnpm --filter @alouna/web dev",
     "build": "pnpm -r build",
     "preview": "pnpm --filter @alouna/web preview",

@@ -1,5 +1,6 @@
 import { Link } from 'react-router';
 import { strings } from '../strings';
+import { DataPanel } from '../data/DataPanel';
 
 /** Placeholder – the map editor is built in M3/M4. */
 export function EditorPage() {
@@ -10,6 +11,7 @@ export function EditorPage() {
         <h1>{strings.editor.title}</h1>
       </header>
       <p className="muted">{strings.editor.placeholder}</p>
+      <DataPanel />
     </main>
   );
 }

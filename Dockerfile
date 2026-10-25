@@ -14,7 +14,8 @@ ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 RUN pnpm build
 
 FROM nginx:stable-alpine
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+ENV ALOUNA_SUPABASE_UPSTREAM=127.0.0.1:9
+COPY deploy/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
