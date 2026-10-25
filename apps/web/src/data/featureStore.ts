@@ -36,7 +36,13 @@ export class FeatureStore {
     return next;
   }
   private async save(change: (data: LocalData) => LocalData): Promise<void> {
-    this.publish(await this.storage.update(change));
+    try {
+      this.publish(await this.storage.update(change));
+    } catch (error) {
+      if (error instanceof BackendError && error.code === 'denied') throw error;
+      this.publish({ ...this.current, snapshot: null, error: 'invalid-data' });
+      throw new BackendError('invalid-data');
+    }
   }
   async open(): Promise<void> {
     this.publish(await this.storage.read());
@@ -143,8 +149,12 @@ export class FeatureStore {
     return this.save((data) => ({
       ...data,
       error,
-      ...(error === 'denied' ? { snapshot: null, profile: null } : {}),
-    }));
+      ...(error === 'denied'
+        ? { snapshot: null, profile: null }
+        : error === 'invalid-data'
+          ? { snapshot: null }
+          : {}),
+    })).catch(() => {});
   }
   clear(): Promise<void> {
     return this.serialize(async () => {

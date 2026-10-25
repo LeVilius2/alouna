@@ -105,6 +105,13 @@ grant select on public.features to authenticated;
 revoke insert, update, delete on public.features from anon, authenticated;
 
 create table alouna_private.map_state (id boolean primary key default true check(id), revision bigint not null default 1);
+-- Invalid legacy geometry is retained for review, never repaired or enabled implicitly.
+create table alouna_private.seed_rejections (
+  source_id uuid primary key,
+  source_name text not null,
+  feature jsonb not null,
+  reason text not null
+);
 insert into alouna_private.map_state default values;
 create table alouna_private.mutation_receipts (
   user_id uuid not null references auth.users(id) on delete cascade,

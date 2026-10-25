@@ -65,7 +65,13 @@ for (const feature of data.features) {
   }
   if (feature.geometry.type !== 'Polygon') throw new Error('Unexpected seed geometry');
   lines.push(
-    `insert into public.features(id,name,category,geom,enabled,owner_label,reviewed,source,notes) values (${quote(uuid(original))},${quote(entry.name)},${quote(entry.category)},extensions.st_setsrid(extensions.st_geomfromgeojson(${quote(JSON.stringify(feature.geometry))}),4326),${entry.enabled},${quote(entry.owner)},true,'import',${quote(`Legacy source name: ${original}`)}) on conflict(id) do nothing;`,
+    `do $seed$ declare g extensions.geometry := extensions.st_setsrid(extensions.st_geomfromgeojson(${quote(JSON.stringify(feature.geometry))}),4326); begin
+  if extensions.st_isvalid(g) then
+    insert into public.features(id,name,category,geom,enabled,owner_label,reviewed,source,notes) values (${quote(uuid(original))},${quote(entry.name)},${quote(entry.category)},g,${entry.enabled},${quote(entry.owner)},true,'import',${quote(`Legacy source name: ${original}`)}) on conflict(id) do nothing;
+  else
+    insert into alouna_private.seed_rejections(source_id,source_name,feature,reason) values (${quote(uuid(original))},${quote(original)},${quote(JSON.stringify(feature))}::jsonb,extensions.st_isvalidreason(g)) on conflict(source_id) do nothing;
+  end if;
+end $seed$;`,
   );
 }
 lines.push('commit;', '');
