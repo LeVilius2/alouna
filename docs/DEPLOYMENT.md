@@ -149,3 +149,30 @@ domain. No validated remote S3 destination was configured during this setup.
 Keep an encrypted copy of the protected Coolify stack configuration/JWT secrets
 alongside any operator-managed off-site backup. Storage uploads are not used in
 M2; add object-storage backups before introducing uploaded media.
+
+## M2 verification (25 October 2026)
+
+The self-hosted bundle is healthy in **Alouna Supabase**. A confirmed administrator
+account was created through the private helper and the owner signed in personally.
+The live `/editor` panel loaded the six approved features, role and cache version.
+The imported self-intersecting neighbour remains quarantined.
+
+Chrome reloaded `/editor` with per-tab network requests blocked; protocol events
+reported `ERR_INTERNET_DISCONNECTED`, while the feature list and cached version 26
+remained available. Restoring normal connectivity and syncing refreshed the cache
+time. Temporary network emulation was removed. This establishes desktop browser
+cache behavior; primary-device Safari field testing remains M8.
+
+External probes confirmed trusted HTTPS, correct PWA manifest MIME, exact
+local/live frontend asset hashes, anonymous map/rule reads denied (401), and 404s
+for Studio and Auth administration/invitation routes. The release passed lint,
+typecheck, 48 tests, deterministic seed verification, build and PostgreSQL
+ownership/review/idempotency/concurrency checks in CI. The production build has a
+non-blocking chunk-size warning; bundle splitting can be addressed with later UI
+work.
+
+The complete backup was restored into a separate database with original owners,
+permission grants and generated GraphQL wrapper. The SQL access tests passed
+against that restored copy, which was then removed. The owner account was backed
+up after creation. The full root cron job is active on the UTC VPS; obsolete trial
+archives are separated under `failed-restore-tests`. Backups remain VPS-local.

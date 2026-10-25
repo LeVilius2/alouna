@@ -60,7 +60,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, test and build on every pu
 
 - [x] M0 – Scaffold, CI, deploy config
 - [x] M1 – Core: geo, rules, routing (+ tests)
-- [ ] M2 – Supabase schema, RLS, seed, offline data layer
+- [x] M2 – Supabase schema, RLS, seed, offline data layer
 - [ ] M3 – Editor: map, drawing, rules panel, import/export
 - [ ] M4 – Editor: route tester, cost overlay, walk simulator
 - [ ] M5 – Navigator (web): heading, location, guidance, sonar, speech, hazards
@@ -111,7 +111,7 @@ _(agents: append milestone notes here)_
   HTTPS, redirects, SPA/PWA files and local/live build hashes. Deploy manually in
   Coolify after GitHub CI passes. Supabase is not provisioned yet.
 
-### M2 (implemented; owner sign-in verification pending)
+### M2 (done)
 
 - PostGIS schema, active admin/walker membership, RLS, private helper schema and
   versioned RPCs are live on the VPS. Direct feature/rule/profile writes are
@@ -144,5 +144,8 @@ _(agents: append milestone notes here)_
 - Local lint/typecheck/tests/build and SQL ownership/review/idempotency/concurrency
   checks pass; live anonymous data access is denied, trusted HTTPS and asset hashes
   verified. Existing PWA tabs may need one reload after their service worker updates.
-  Remaining: owner completes the private password prompt/sign-in, then verify the
-  authenticated feature list and an offline browser reload before ticking M2.
+  Owner account creation/sign-in verified. A browser reload with requests blocked
+  (`ERR_INTERNET_DISCONNECTED`) retained all six features and approved version 26
+  from IndexedDB; reconnecting/syncing refreshed the cache. Network overrides were
+  removed. All 48 tests, SQL access/concurrency checks and build pass. iPhone field
+  testing remains M8; map drawing starts in M3.
