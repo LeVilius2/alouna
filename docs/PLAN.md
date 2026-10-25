@@ -6,28 +6,28 @@
 2. **Navigator (blind user):** guidance by GPS and compass, using **sonar-style spatial audio**. It plans routes around obstacles and follows rules (avoid ditches, cross the road only at crossings, and so on).
 
 > [!CAUTION]
-> Phone GPS is accurate to only about **3–10 m**, and worse under trees or near buildings. The app is an *aid* alongside a cane or a companion. It does not replace them. Use generous safety buffers around water and ditches. Test every route with a sighted companion first. To get precise accuracy later, see M9 (external GNSS receiver).
+> Phone GPS is accurate to only about **3–10 m**, and worse under trees or near buildings. The app is an _aid_ alongside a cane or a companion. It does not replace them. Use generous safety buffers around water and ditches. Test every route with a sighted companion first. To get precise accuracy later, see M9 (external GNSS receiver).
 
 ---
 
 ## 1. Tech stack
 
-| Layer | Choice | Why |
-|---|---|---|
-| Language | **TypeScript** everywhere | One language. Codex handles it well. |
-| Monorepo | **pnpm workspaces** | `apps/web` + `packages/core` |
-| Frontend | **React 18 + Vite + React Router** | One app with two routes: `/editor` and `/navigate` |
-| Map | **MapLibre GL JS** (via `react-map-gl/maplibre`) | Free, fast vector/raster maps, no API key |
-| Drawing/editing | **Terra Draw** (`terra-draw` + MapLibre adapter) | Point, line, and polygon drawing plus vertex editing |
-| Basemap | **Lithuanian orthophoto ORT10LT** (geoportal.lt WMS/WMTS), with OSM and Esri World Imagery as fallbacks | Aerial imagery where you can see the property itself |
-| Geometry | **Turf.js** + **proj4** (EPSG:3346 LKS94 ↔ WGS84) | Buffers, distances, and LKS94 import (the old repo used LKS94) |
-| Routing | **Custom grid A\*** in `packages/core`, run in a **Web Worker** | Applies the rules with costs (details in §4) |
-| Audio | **Web Audio API** (oscillators + `StereoPannerNode`) + **SpeechSynthesis** | Sonar pings, left/right panning, spoken prompts |
-| Backend | **Supabase** (Postgres + **PostGIS**, Auth, **Realtime**) | Stores features, rules, and users; streams live locations; free tier is enough |
-| Offline | **vite-plugin-pwa** (Workbox) + **IndexedDB** (`idb-keyval`) | Lakeside mobile signal can be weak. Navigation must work offline. |
-| Tests | **Vitest** (core logic), **Playwright** (smoke) | Routing and guidance math must be unit-tested |
-| Hosting | **Cloudflare Pages / Netlify / Vercel** (HTTPS required for GPS and compass) | Free, auto-deploys from GitHub |
-| Platform | **Web only (PWA)**, iPhone Safari first, Android Chrome supported | No app installs: open a link, "Add to Home Screen" |
+| Layer           | Choice                                                                                                  | Why                                                                            |
+| --------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Language        | **TypeScript** everywhere                                                                               | One language. Codex handles it well.                                           |
+| Monorepo        | **pnpm workspaces**                                                                                     | `apps/web` + `packages/core`                                                   |
+| Frontend        | **React 18 + Vite + React Router**                                                                      | One app with two routes: `/editor` and `/navigate`                             |
+| Map             | **MapLibre GL JS** (via `react-map-gl/maplibre`)                                                        | Free, fast vector/raster maps, no API key                                      |
+| Drawing/editing | **Terra Draw** (`terra-draw` + MapLibre adapter)                                                        | Point, line, and polygon drawing plus vertex editing                           |
+| Basemap         | **Lithuanian orthophoto ORT10LT** (geoportal.lt WMS/WMTS), with OSM and Esri World Imagery as fallbacks | Aerial imagery where you can see the property itself                           |
+| Geometry        | **Turf.js** + **proj4** (EPSG:3346 LKS94 ↔ WGS84)                                                       | Buffers, distances, and LKS94 import (the old repo used LKS94)                 |
+| Routing         | **Custom grid A\*** in `packages/core`, run in a **Web Worker**                                         | Applies the rules with costs (details in §4)                                   |
+| Audio           | **Web Audio API** (oscillators + `StereoPannerNode`) + **SpeechSynthesis**                              | Sonar pings, left/right panning, spoken prompts                                |
+| Backend         | **Supabase** (Postgres + **PostGIS**, Auth, **Realtime**)                                               | Stores features, rules, and users; streams live locations; free tier is enough |
+| Offline         | **vite-plugin-pwa** (Workbox) + **IndexedDB** (`idb-keyval`)                                            | Lakeside mobile signal can be weak. Navigation must work offline.              |
+| Tests           | **Vitest** (core logic), **Playwright** (smoke)                                                         | Routing and guidance math must be unit-tested                                  |
+| Hosting         | **Cloudflare Pages / Netlify / Vercel** (HTTPS required for GPS and compass)                            | Free, auto-deploys from GitHub                                                 |
+| Platform        | **Web only (PWA)**, iPhone Safari first, Android Chrome supported                                       | No app installs: open a link, "Add to Home Screen"                             |
 
 ---
 
@@ -103,25 +103,25 @@ create table tracks (id bigserial primary key, user_id uuid, ts timestamptz, lon
 
 **Default categories (seed):**
 
-| category | geom | passable | cost | buffer_m | warn_m | notes |
-|---|---|---|---|---|---|---|
-| `walkable_area` | polygon | – | – | – | – | Areas he may walk in (our plot, and later neighbours' plots, shore). **Multiple allowed.** Cells outside every walkable area are blocked. Each has `enabled` + `owner_label` so neighbour areas can be added or switched off. |
-| `path` | line/polygon | ✅ | 0.4 | – | – | Preferred. Default `width_m` 1.5 |
-| `grass` / default | – | ✅ | 1.0 | – | – | Cost of an unclassified cell inside a walkable area |
-| `rough` | polygon | ✅ | 3.0 | – | – | Tall grass, roots, slope |
-| `caution` | polygon | ✅ | 6.0 | – | 3 | Speaks when entering |
-| `road` | line/polygon | ❌ | – | 1.0 | 5 | Blocked **except** where a `crossing` overrides |
-| `crossing` | line/polygon | ✅ | 1.0 | – | 5 | `overrides {road}`. Says "Road crossing. Stop and listen." |
-| `ditch` | line/polygon | ❌ | – | 1.5 | 4 | |
-| `water` | polygon | ❌ | – | 2.5 | 6 | Lake |
-| `dock` | line/polygon | ✅ | 1.0 | – | 3 | `overrides {water}` |
-| `building` | polygon | ❌ | – | 0.5 | 2 | |
-| `fence` / `wall` | line | ❌ | – | 0.3 | 2 | |
-| `gate` / `door` | point/line | ✅ | 1.0 | – | 3 | `overrides {fence, wall, building}` |
-| `obstacle` | point | ❌ | – | `radius_m` (default 0.7) | 2 | Tree, post, rock, bench |
-| `steps` | point/line | ✅ | 2.0 | – | 3 | Says "Steps" |
-| `no_go` | polygon | ❌ | – | 1.0 | 4 | |
-| `landmark` | point | ✅ | – | – | – | Usually `is_destination = true` |
+| category          | geom         | passable | cost | buffer_m                 | warn_m | notes                                                                                                                                                                                                                         |
+| ----------------- | ------------ | -------- | ---- | ------------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `walkable_area`   | polygon      | –        | –    | –                        | –      | Areas he may walk in (our plot, and later neighbours' plots, shore). **Multiple allowed.** Cells outside every walkable area are blocked. Each has `enabled` + `owner_label` so neighbour areas can be added or switched off. |
+| `path`            | line/polygon | ✅       | 0.4  | –                        | –      | Preferred. Default `width_m` 1.5                                                                                                                                                                                              |
+| `grass` / default | –            | ✅       | 1.0  | –                        | –      | Cost of an unclassified cell inside a walkable area                                                                                                                                                                           |
+| `rough`           | polygon      | ✅       | 3.0  | –                        | –      | Tall grass, roots, slope                                                                                                                                                                                                      |
+| `caution`         | polygon      | ✅       | 6.0  | –                        | 3      | Speaks when entering                                                                                                                                                                                                          |
+| `road`            | line/polygon | ❌       | –    | 1.0                      | 5      | Blocked **except** where a `crossing` overrides                                                                                                                                                                               |
+| `crossing`        | line/polygon | ✅       | 1.0  | –                        | 5      | `overrides {road}`. Says "Road crossing. Stop and listen."                                                                                                                                                                    |
+| `ditch`           | line/polygon | ❌       | –    | 1.5                      | 4      |                                                                                                                                                                                                                               |
+| `water`           | polygon      | ❌       | –    | 2.5                      | 6      | Lake                                                                                                                                                                                                                          |
+| `dock`            | line/polygon | ✅       | 1.0  | –                        | 3      | `overrides {water}`                                                                                                                                                                                                           |
+| `building`        | polygon      | ❌       | –    | 0.5                      | 2      |                                                                                                                                                                                                                               |
+| `fence` / `wall`  | line         | ❌       | –    | 0.3                      | 2      |                                                                                                                                                                                                                               |
+| `gate` / `door`   | point/line   | ✅       | 1.0  | –                        | 3      | `overrides {fence, wall, building}`                                                                                                                                                                                           |
+| `obstacle`        | point        | ❌       | –    | `radius_m` (default 0.7) | 2      | Tree, post, rock, bench                                                                                                                                                                                                       |
+| `steps`           | point/line   | ✅       | 2.0  | –                        | 3      | Says "Steps"                                                                                                                                                                                                                  |
+| `no_go`           | polygon      | ❌       | –    | 1.0                      | 4      |                                                                                                                                                                                                                               |
+| `landmark`        | point        | ✅       | –    | –                        | –      | Usually `is_destination = true`                                                                                                                                                                                               |
 
 **Seed data:** convert the existing `wgs84coord.geojson` from the old repo ("Musu" → `walkable_area` enabled; neighbours "Neringos", "Kaimyno" → `walkable_area` **disabled**, ready to switch on; "Ežeras" → `water`; map-bound lines → ignored or `notes`). Translate names to English where it helps (e.g., "Ežeras" → "Lake").
 
@@ -130,19 +130,20 @@ create table tracks (id bigserial primary key, user_id uuid, ts timestamptz, lon
 ## 4. Routing algorithm (`packages/core/routing`)
 
 1. **Project** all features to **LKS94 (EPSG:3346)** in meters (proj4).
-2. **Rasterize** to a grid over the bbox of all *enabled* `walkable_area`s plus a 20 m margin. Cell size **0.5 m** (configurable). A 300 × 300 m area gives 360k cells, which is fine in a worker.
+2. **Rasterize** to a grid over the bbox of all _enabled_ `walkable_area`s plus a 20 m margin. Cell size **0.5 m** (configurable). A 300 × 300 m area gives 360k cells, which is fine in a worker.
    - **Built to grow (neighbours, shore):** the grid is split into **64 × 64 m tiles**, which are rasterized lazily and cached per tile and data version. A\* only loads the tiles it reaches. When the total area gets large (over about 1 km²), cell size is raised to 1.0 m automatically. Don't hard-code any bbox or property ID anywhere.
    - Initialize each cell: inside any enabled `walkable_area` → default cost 1.0. Outside → blocked.
    - Paint features in ascending `priority`. Lines are buffered by `width_m/2`, points by `radius_m`.
    - Blocked categories are inflated by `buffer_m` (safety margin).
    - **Overrides are painted last:** cells covered by a `crossing` become passable even where `road` blocked them, and the same for `gate` over `fence` and `dock` over `water`. This is how "cross the road only at a crossing" works: the road is a wall everywhere else.
 3. **A\*** with 8-connectivity, octile heuristic, and cost = distance × cell cost. Add a small **clearance penalty**: a cell's cost goes up near blocked cells (distance transform), so routes stay in the middle of paths and away from hazards.
-4. **Smooth** with line-of-sight string pulling. A segment may skip cells only if every cell along it is passable *and* has a cost no higher than its endpoints. This keeps the route on paths and inside crossings.
+4. **Smooth** with line-of-sight string pulling. A segment may skip cells only if every cell along it is passable _and_ has a cost no higher than its endpoints. This keeps the route on paths and inside crossings.
 5. **Output** a polyline of waypoints in WGS84, plus annotated **events**: "enter crossing at waypoint 4", "steps at 32 m", "turn left 70°".
 6. Cache the grid per data version (hash of features + rules) in IndexedDB. Rebuild only when the data changes.
 7. **Snap start/end:** if the user's GPS position falls in a blocked cell (GPS noise), snap to the nearest passable cell and say so.
 
 Unit tests (Vitest), each with a tiny synthetic map:
+
 - A route around a single obstacle.
 - A route that must use a distant crossing rather than cross the road directly.
 - A route that must use a gate in a fence.
@@ -156,21 +157,22 @@ Unit tests (Vitest), each with a tiny synthetic map:
 **Principles:** fully usable with **VoiceOver/TalkBack**. Huge buttons with good `aria-label`s, high contrast, very few screens. Everything is announced by speech. The phone is held flat, top edge pointing forward. Recommend **bone-conduction headphones** (e.g., Shokz) so he still hears cars, water, and people.
 
 **Screens:**
+
 1. **Home:** "Where to?" Destinations are a large list sorted by distance, plus a "Repeat last" button.
 2. **Navigating:** one full-screen **Stop** button. Tap anywhere for "Where am I?" (spoken: nearest landmark, distance remaining, GPS quality). Swipe or double-tap for "Repeat instruction".
 3. **Add here:** a big button (see §7). It can be hidden behind a setting if he shouldn't use it.
 
 **Sonar audio design** (an upgrade of the attached example):
 
-| Signal | Meaning |
-|---|---|
-| **Ping repetition rate** | Distance to the next waypoint: far = 1 ping / 1.5 s, close = 1 ping / 0.3 s |
-| **Stereo pan** (`StereoPannerNode`) | **Which way to turn.** Target to the right → ping in the right ear. *The original example only told "how wrong", not "which way".* |
-| **Pitch / brightness** | Alignment: on course (±10°) = high, bright ping with a short "tick-tick" confirmation. Off course = lower, duller ping. |
-| **Low "whoop"** | Target is behind (>135°): turn around |
-| **Rough buzz (+ vibration on Android)** | Hazard within `warn_m` (ditch/water/road), plus speech: "Ditch, 3 meters, left" |
-| **Chime + speech** | Arrived (within 2 m, or within the GPS accuracy radius if that is larger, with a cap) |
-| **Speech** | Start ("To the sauna, 85 meters"), turns >45° ("Turn left"), crossings ("Road crossing. Stop and listen."), steps, off-route, weak GPS |
+| Signal                                  | Meaning                                                                                                                                |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ping repetition rate**                | Distance to the next waypoint: far = 1 ping / 1.5 s, close = 1 ping / 0.3 s                                                            |
+| **Stereo pan** (`StereoPannerNode`)     | **Which way to turn.** Target to the right → ping in the right ear. _The original example only told "how wrong", not "which way"._     |
+| **Pitch / brightness**                  | Alignment: on course (±10°) = high, bright ping with a short "tick-tick" confirmation. Off course = lower, duller ping.                |
+| **Low "whoop"**                         | Target is behind (>135°): turn around                                                                                                  |
+| **Rough buzz (+ vibration on Android)** | Hazard within `warn_m` (ditch/water/road), plus speech: "Ditch, 3 meters, left"                                                        |
+| **Chime + speech**                      | Arrived (within 2 m, or within the GPS accuracy radius if that is larger, with a cap)                                                  |
+| **Speech**                              | Start ("To the sauna, 85 meters"), turns >45° ("Turn left"), crossings ("Road crossing. Stop and listen."), steps, off-route, weak GPS |
 
 - **Language:** **English only** (`en-US`/`en-GB` voice, chosen in settings, with speech rate adjustable). Keep all strings in one `strings.ts` so other languages could be added later, but don't build i18n infrastructure now.
 - **Guidance logic** ("pure pursuit"): aim at a **carrot point** 4–6 m ahead along the route, not at the raw waypoint, so turns are smooth. Advance along the route by projecting the position onto the polyline.
@@ -178,6 +180,7 @@ Unit tests (Vitest), each with a tiny synthetic map:
 - **Stop conditions:** if GPS accuracy is worse than 15 m, or there has been no fix for 5 s → pause the sonar and say "GPS weak, stop and wait".
 
 **Heading (important fixes over the example):**
+
 - iOS: `event.webkitCompassHeading`. Requires `DeviceOrientationEvent.requestPermission()` on a user tap.
 - Android Chrome: use the **`deviceorientationabsolute`** event. Plain `deviceorientation` + `360 - alpha` is **not** relative to true north on Android. That is a bug in the example.
 - Compensate for `screen.orientation.angle`. Lock the UI to portrait.
@@ -186,6 +189,7 @@ Unit tests (Vitest), each with a tiny synthetic map:
 - Apply magnetic declination (about +8° in Lithuania; make it configurable) if the platform gives magnetic rather than true north.
 
 **Platform: web only (PWA), iPhone Safari is the primary target.** No native app and no App Store or TestFlight. He opens a link and taps "Add to Home Screen". iPhone web apps have hard limits, and the design accepts them:
+
 - **The screen must stay on and the app must stay in the foreground** while navigating. Audio and GPS stop when the screen locks. Use the Screen **Wake Lock API** (iOS 16.4+) and re-acquire it on `visibilitychange`. If the app was backgrounded, say "Navigation paused" on return and re-plan. Turn on iOS **Auto-Lock "Never"** during walks, or rely on the wake lock. Holding the phone in hand is natural anyway, since the compass needs it pointed forward.
 - **The silent switch can mute Web Audio:** play a silent looping `<audio>` element (the "playback" audio session trick) started from the Start tap. Resume the `AudioContext` on every user tap.
 - **No vibration API on iOS:** audio cues carry all the meaning. Optional experiment: iOS 18 Safari gives a haptic tick when toggling an `<input type="checkbox" switch>`. Try it for "on course" and "hazard" taps behind a feature flag, with a graceful no-op elsewhere. On Android, use `navigator.vibrate`.
@@ -215,6 +219,7 @@ Unit tests (Vitest), each with a tiny synthetic map:
 ## 7. Adding objects from the field ("Add here")
 
 On the phone, available in the navigator settings and in the editor on mobile:
+
 - **Point:** "Add here" → **averages GPS fixes for 10–20 s** and discards fixes with accuracy worse than 10 m. It shows and speaks the resulting accuracy. Then you pick a category and a name. Voice input for the name is optional, via the keyboard dictation button.
 - **Line / area by walking:** "Start recording" → walk along the ditch edge, fence, or path → "Stop". The app simplifies the track (Turf `simplify`, about 0.5 m tolerance) and saves it as a line, or as a closed polygon.
 - **Offset capture:** "Object is ~2 m in front of me" uses the compass heading plus a distance to place a point you can't stand on (water edge, ditch).
@@ -228,7 +233,7 @@ On the phone, available in the navigator settings and in the editor on mobile:
 - The navigator publishes `{user_id, lon, lat, accuracy, heading, speed, destination_id, route_progress, ts}` every **1–2 s** on the Supabase Realtime **broadcast** channel `live-positions`. **Presence** tracks who is online.
 - Optionally insert one row every 10 s into `tracks` for history and debugging (with a retention setting).
 - The editor subscribes to the channel and renders the markers.
-- Auth: Supabase email magic link. Roles: `admin` (editor plus everything, including rules and deleting anyone's features) and `walker` (navigator; **can read and add features**, and edit or delete only their own). Use RLS policies accordingly. In the editor, admins see features added by walkers highlighted as *needs review* (`reviewed boolean default false`).
+- Auth: Supabase email magic link. Roles: `admin` (editor plus everything, including rules and deleting anyone's features) and `walker` (navigator; **can read and add features**, and edit or delete only their own). Use RLS policies accordingly. In the editor, admins see features added by walkers highlighted as _needs review_ (`reviewed boolean default false`).
 
 ---
 
@@ -263,18 +268,18 @@ alouna/
 
 ## 10. Milestones (give Codex one at a time)
 
-| # | Milestone | Done when |
-|---|---|---|
-| **M0** | Scaffold: pnpm monorepo, Vite React TS, Vitest, ESLint/Prettier, AGENTS.md, CI (GitHub Actions: lint + test + build), deploy to Pages | The empty app is live on HTTPS |
-| **M1** | `packages/core`: projection, geo math, rules types and defaults, rasterize, A\*, smoothing, route events. Full unit tests from §4. | `pnpm test` is green. The road/crossing test passes. |
-| **M2** | Supabase: migration, RLS, seed from old GeoJSON. Data layer with an IndexedDB cache and offline queue. | Features load in the app offline after the first visit |
-| **M3** | Editor: map + orthophoto, Terra Draw editing, feature panel, rules panel, import (GeoJSON/KML/GPX/CSV/LKS94), export | You can draw and import the property, toggle neighbour areas on and off, and edits persist |
-| **M4** | Editor route tester + cost-grid overlay + walk simulator (with audio from M5 once it exists) | Click A → B and see the correct rule-following route |
-| **M5** | Navigator: destinations, heading provider (iOS/Android fixes), location provider (GPS + simulator), guidance engine, sonar audio, speech (lt/en), hazard warnings, off-route re-plan, wake lock | Simulated walk works in the browser. A real phone walk works outdoors. |
-| **M6** | Live location: realtime publish/subscribe, presence, optional tracks | The editor shows the phone moving live |
-| **M7** | Field capture: Add here (averaged), record walk (line/polygon), offset capture, offline sync | You can map a ditch by walking along it |
-| **M8** | PWA polish + field testing: installable, offline, accessibility audit with VoiceOver, tune buffers and sounds on site | Brother completes test routes with a companion shadowing him |
-| **M9** *(optional, hardware only)* | **External GNSS receiver that overrides iPhone Location Services** (MFi receivers such as Bad Elf Flex or Eos Arrow; RTK models can use **LitPOS** NTRIP corrections for cm-level accuracy). Safari's `navigator.geolocation` then gets the better fixes automatically, with **no code changes**. Code work: only show the reported `accuracy` and tighten thresholds when it is under 1 m. (Web Bluetooth doesn't exist on iOS Safari, so cheap Bluetooth-only receivers won't work.) | Accuracy goes from meters to sub-meter or centimeters |
+| #                                  | Milestone                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Done when                                                                                  |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **M0**                             | Scaffold: pnpm monorepo, Vite React TS, Vitest, ESLint/Prettier, AGENTS.md, CI (GitHub Actions: lint + test + build), deploy to Pages                                                                                                                                                                                                                                                                                                                                                  | The empty app is live on HTTPS                                                             |
+| **M1**                             | `packages/core`: projection, geo math, rules types and defaults, rasterize, A\*, smoothing, route events. Full unit tests from §4.                                                                                                                                                                                                                                                                                                                                                     | `pnpm test` is green. The road/crossing test passes.                                       |
+| **M2**                             | Supabase: migration, RLS, seed from old GeoJSON. Data layer with an IndexedDB cache and offline queue.                                                                                                                                                                                                                                                                                                                                                                                 | Features load in the app offline after the first visit                                     |
+| **M3**                             | Editor: map + orthophoto, Terra Draw editing, feature panel, rules panel, import (GeoJSON/KML/GPX/CSV/LKS94), export                                                                                                                                                                                                                                                                                                                                                                   | You can draw and import the property, toggle neighbour areas on and off, and edits persist |
+| **M4**                             | Editor route tester + cost-grid overlay + walk simulator (with audio from M5 once it exists)                                                                                                                                                                                                                                                                                                                                                                                           | Click A → B and see the correct rule-following route                                       |
+| **M5**                             | Navigator: destinations, heading provider (iOS/Android fixes), location provider (GPS + simulator), guidance engine, sonar audio, speech (lt/en), hazard warnings, off-route re-plan, wake lock                                                                                                                                                                                                                                                                                        | Simulated walk works in the browser. A real phone walk works outdoors.                     |
+| **M6**                             | Live location: realtime publish/subscribe, presence, optional tracks                                                                                                                                                                                                                                                                                                                                                                                                                   | The editor shows the phone moving live                                                     |
+| **M7**                             | Field capture: Add here (averaged), record walk (line/polygon), offset capture, offline sync                                                                                                                                                                                                                                                                                                                                                                                           | You can map a ditch by walking along it                                                    |
+| **M8**                             | PWA polish + field testing: installable, offline, accessibility audit with VoiceOver, tune buffers and sounds on site                                                                                                                                                                                                                                                                                                                                                                  | Brother completes test routes with a companion shadowing him                               |
+| **M9** _(optional, hardware only)_ | **External GNSS receiver that overrides iPhone Location Services** (MFi receivers such as Bad Elf Flex or Eos Arrow; RTK models can use **LitPOS** NTRIP corrections for cm-level accuracy). Safari's `navigator.geolocation` then gets the better fixes automatically, with **no code changes**. Code work: only show the reported `accuracy` and tighten thresholds when it is under 1 m. (Web Bluetooth doesn't exist on iOS Safari, so cheap Bluetooth-only receivers won't work.) | Accuracy goes from meters to sub-meter or centimeters                                      |
 
 > [!TIP]
 > If he uses it a lot near the water or ditches, an external receiver (M9) is the single biggest safety upgrade, and the web app benefits without any changes. Check before buying that the receiver supports **iOS Location Services override**.
@@ -298,5 +303,5 @@ left, and any deviations from the plan.
 
 1. **Device:** mostly iPhone. **Web only (PWA), no native app**, because installing iOS apps is too much hassle. Android Chrome is supported through the same code.
 2. **Language:** English only.
-3. **Who adds objects:** both the admin and the walker. Walker additions are flagged *needs review* in the editor.
+3. **Who adds objects:** both the admin and the walker. Walker additions are flagged _needs review_ in the editor.
 4. **Area:** start with our plot. The design must allow adding neighbours' plots and the shore later (multiple `walkable_area`s, tiled routing grid, nothing hard-coded).

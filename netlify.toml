@@ -1,0 +1,8 @@
+# Netlify config. (Cloudflare Pages works too: build command `pnpm build`,
+# output dir `apps/web/dist`; the SPA fallback comes from apps/web/public/_redirects.)
+[build]
+  command = "pnpm build"
+  publish = "apps/web/dist"
+
+[build.environment]
+  NODE_VERSION = "22"
