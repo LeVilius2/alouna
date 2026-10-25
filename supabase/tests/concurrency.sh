@@ -19,7 +19,7 @@ SQL
 alouna_first=$!
 # Wait until the first transaction owns the entity lock before racing a new create.
 for _ in {1..50}; do
-  if psql -Atqc "select exists(select 1 from pg_locks where locktype='advisory' and granted)" | rg -q '^t$'; then break; fi
+  if [[ "$(psql -Atqc "select exists(select 1 from pg_locks where locktype='advisory' and granted)")" == t ]]; then break; fi
   sleep 0.1
 done
 if psql -v ON_ERROR_STOP=1 -q >"$alouna_tmp/second" 2>&1 <<'SQL'
@@ -37,6 +37,6 @@ then
   exit 1
 fi
 wait "$alouna_first"
-rg -q '40001:.*Revision conflict' "$alouna_tmp/second"
+[[ "$(<"$alouna_tmp/second")" =~ 40001:.*Revision\ conflict ]]
 test "$(psql -Atqc "select name || ':' || revision from public.features where id='20000000-0000-0000-0000-000000000010'")" = 'First:1'
 echo 'Concurrent revision-zero creates cannot overwrite each other'
