@@ -138,8 +138,9 @@ Coolify's default native `pg_dump` uses `--no-acl --no-owner`. Its initial backu
 restored the rows but failed permission verification, so that schedule is disabled.
 The replacement includes the original owners and grants. To test a new backup,
 run `scripts/verify-restore.sh SERVICE_UUID DUMP_PATH alouna_m2_restore_verify`.
-It creates a separate database from `template0`, restores schema then the generated
-GraphQL wrapper, data and permission grants, and runs the SQL access checks.
+It creates a separate database from `template0`, restores the archive while
+deferring only the generated GraphQL wrapper grants, then applies that wrapper
+with its exact ownership/grants and runs the SQL access checks.
 Remove only that disposable database after the checks pass. Never restore over the live database as a test. A new VPS must first
 initialize the same Supabase bundle's system roles/extensions.
 
