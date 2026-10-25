@@ -12,11 +12,12 @@ import uuid
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--stack', required=True, help='Coolify Supabase service UUID')
-parser.add_argument('--email', required=True)
+parser.add_argument('--email', help='Omit to enter the email interactively')
 parser.add_argument('--role', choices=['admin', 'walker'], default='walker')
 parser.add_argument('--name', default='')
 parser.add_argument('--reset-password', action='store_true', help='Reset an existing account password')
 args = parser.parse_args()
+args.email = args.email or input('Alouna account email: ').strip()
 if not re.fullmatch(r'[a-z0-9]{20,32}', args.stack) or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', args.email):
     parser.error('Invalid service UUID or email address')
 
