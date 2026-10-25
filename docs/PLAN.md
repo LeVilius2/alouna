@@ -6,7 +6,7 @@
 2. **Navigator (blind user):** guidance by GPS and compass, using **sonar-style spatial audio**. It plans routes around obstacles and follows rules (avoid ditches, cross the road only at crossings, and so on).
 
 > [!CAUTION]
-> Phone GPS is accurate to only about **3–10 m**, and worse under trees or near buildings. The app is an *aid* alongside a cane or a companion. It does not replace them. Use generous safety buffers around water and ditches. Test every route with a sighted companion first. To get precise accuracy later, see Phase 8 (RTK GNSS).
+> Phone GPS is accurate to only about **3–10 m**, and worse under trees or near buildings. The app is an *aid* alongside a cane or a companion. It does not replace them. Use generous safety buffers around water and ditches. Test every route with a sighted companion first. To get precise accuracy later, see M9 (external GNSS receiver).
 
 ---
 
@@ -27,7 +27,7 @@
 | Offline | **vite-plugin-pwa** (Workbox) + **IndexedDB** (`idb-keyval`) | Lakeside mobile signal can be weak. Navigation must work offline. |
 | Tests | **Vitest** (core logic), **Playwright** (smoke) | Routing and guidance math must be unit-tested |
 | Hosting | **Cloudflare Pages / Netlify / Vercel** (HTTPS required for GPS and compass) | Free, auto-deploys from GitHub |
-| Native shell (**M5b**, iPhone is the primary device) | **Capacitor 6** wrapper for iOS (Android later from the same code) | Haptics on iPhone, audio and GPS keep working with the screen locked or in a pocket, more reliable compass, Bluetooth RTK receiver later |
+| Platform | **Web only (PWA)**, iPhone Safari first, Android Chrome supported | No app installs: open a link, "Add to Home Screen" |
 
 ---
 
@@ -36,12 +36,12 @@
 ```mermaid
 flowchart LR
   subgraph Phone["Navigator (phone, PWA)"]
-    GPS["Location provider (GPS / simulator / RTK later)"] --> Filter["Smoothing + accuracy gate"]
+    GPS["Location provider (GPS / simulator)"] --> Filter["Smoothing + accuracy gate"]
     Compass["Heading provider (compass + GPS course)"] --> Guide
     Filter --> Guide["Guidance engine (carrot on route)"]
     Cache["IndexedDB: features + rules"] --> Router["A* router (Web Worker)"]
     Router --> Guide
-    Guide --> Audio["Sonar audio + speech + vibration"]
+    Guide --> Audio["Sonar audio + speech (+ vibration on Android)"]
   end
   subgraph Cloud["Supabase"]
     DB[("Postgres + PostGIS: features, rules, profiles, tracks")]
@@ -168,7 +168,7 @@ Unit tests (Vitest), each with a tiny synthetic map:
 | **Stereo pan** (`StereoPannerNode`) | **Which way to turn.** Target to the right → ping in the right ear. *The original example only told "how wrong", not "which way".* |
 | **Pitch / brightness** | Alignment: on course (±10°) = high, bright ping with a short "tick-tick" confirmation. Off course = lower, duller ping. |
 | **Low "whoop"** | Target is behind (>135°): turn around |
-| **Rough buzz + vibration** | Hazard within `warn_m` (ditch/water/road), plus speech: "Ditch, 3 meters, left" |
+| **Rough buzz (+ vibration on Android)** | Hazard within `warn_m` (ditch/water/road), plus speech: "Ditch, 3 meters, left" |
 | **Chime + speech** | Arrived (within 2 m, or within the GPS accuracy radius if that is larger, with a cap) |
 | **Speech** | Start ("To the sauna, 85 meters"), turns >45° ("Turn left"), crossings ("Road crossing. Stop and listen."), steps, off-route, weak GPS |
 
@@ -185,22 +185,13 @@ Unit tests (Vitest), each with a tiny synthetic map:
 - When walking faster than about 0.7 m/s with good accuracy, blend in the GPS `coords.heading` (course over ground).
 - Apply magnetic declination (about +8° in Lithuania; make it configurable) if the platform gives magnetic rather than true north.
 
-**Platform: iPhone is the primary device.** Plain web apps on iPhone have hard limits:
-- No vibration (`navigator.vibrate` doesn't exist).
-- Audio and GPS stop when the screen locks or the app goes to the background.
-- The silent switch can mute Web Audio.
-- Compass permission has to be requested on every launch.
-
-So:
-- **M5 (web version):** use the Screen **Wake Lock API** (iOS 16.4+) to keep the screen on. Resume the `AudioContext` on every user tap. Play a silent `<audio>` element in a loop so the silent switch doesn't mute the sonar. This is good enough for testing.
-- **M5b (Capacitor iOS app):** the version he uses day to day. It brings in:
-  - Haptics (`@capacitor/haptics`: Taptic Engine pulses for on course, turns and hazards).
-  - Background location (`@capacitor-community/background-geolocation`).
-  - The `audio` background mode in `Info.plist`, so the sonar keeps playing with the screen locked.
-  - The native compass (`CLLocationManager` true heading, via a small plugin or `@capacitor/motion` if it's accurate enough).
-  - An `AVAudioSession` `.playback` category, so the silent switch doesn't mute it.
-- The sensors and haptics live behind interfaces (`locationProvider`, `headingProvider`, `haptics`). The same React code then runs both in Safari and in the iOS app.
-- Distribution: install it with Xcode on your Mac. A free Apple ID means re-installing every 7 days. The paid Apple Developer account (€99/yr) gives **TestFlight**, which keeps it on his phone without re-installing.
+**Platform: web only (PWA), iPhone Safari is the primary target.** No native app and no App Store or TestFlight. He opens a link and taps "Add to Home Screen". iPhone web apps have hard limits, and the design accepts them:
+- **The screen must stay on and the app must stay in the foreground** while navigating. Audio and GPS stop when the screen locks. Use the Screen **Wake Lock API** (iOS 16.4+) and re-acquire it on `visibilitychange`. If the app was backgrounded, say "Navigation paused" on return and re-plan. Turn on iOS **Auto-Lock "Never"** during walks, or rely on the wake lock. Holding the phone in hand is natural anyway, since the compass needs it pointed forward.
+- **The silent switch can mute Web Audio:** play a silent looping `<audio>` element (the "playback" audio session trick) started from the Start tap. Resume the `AudioContext` on every user tap.
+- **No vibration API on iOS:** audio cues carry all the meaning. Optional experiment: iOS 18 Safari gives a haptic tick when toggling an `<input type="checkbox" switch>`. Try it for "on course" and "hazard" taps behind a feature flag, with a graceful no-op elsewhere. On Android, use `navigator.vibrate`.
+- **Compass permission** (`DeviceOrientationEvent.requestPermission()`) has to be requested from a user tap on each launch. Make it part of the big "Start" button.
+- **Battery:** screen on + GPS + audio drains the battery. Show and speak the battery level at start if the Battery API is available (not on iOS, so just mention it in the help text). Recommend a dark UI and the lowest brightness.
+- The sensors and outputs live behind interfaces (`LocationProvider`, `HeadingProvider`, `Haptics`, `Sonar`, `Speech`), so the simulator can stand in for real sensors.
 
 ---
 
@@ -280,14 +271,13 @@ alouna/
 | **M3** | Editor: map + orthophoto, Terra Draw editing, feature panel, rules panel, import (GeoJSON/KML/GPX/CSV/LKS94), export | You can draw and import the property, toggle neighbour areas on and off, and edits persist |
 | **M4** | Editor route tester + cost-grid overlay + walk simulator (with audio from M5 once it exists) | Click A → B and see the correct rule-following route |
 | **M5** | Navigator: destinations, heading provider (iOS/Android fixes), location provider (GPS + simulator), guidance engine, sonar audio, speech (lt/en), hazard warnings, off-route re-plan, wake lock | Simulated walk works in the browser. A real phone walk works outdoors. |
-| **M5b** | **Capacitor iOS shell**: haptics, background location, background audio, native true heading, silent-switch-proof audio session, `Info.plist` permission texts; TestFlight build | Navigation keeps working with the iPhone locked in his pocket or hand, with haptic cues |
 | **M6** | Live location: realtime publish/subscribe, presence, optional tracks | The editor shows the phone moving live |
 | **M7** | Field capture: Add here (averaged), record walk (line/polygon), offset capture, offline sync | You can map a ditch by walking along it |
 | **M8** | PWA polish + field testing: installable, offline, accessibility audit with VoiceOver, tune buffers and sounds on site | Brother completes test routes with a companion shadowing him |
-| **M9** *(optional)* | **Bluetooth RTK GNSS** plugin for the Capacitor app (e.g., ArduSimple/u-blox ZED-F9P or Emlid Reach RX with **LitPOS** NTRIP corrections → ~2 cm accuracy) | Accuracy goes from meters to centimeters |
+| **M9** *(optional, hardware only)* | **External GNSS receiver that overrides iPhone Location Services** (MFi receivers such as Bad Elf Flex or Eos Arrow; RTK models can use **LitPOS** NTRIP corrections for cm-level accuracy). Safari's `navigator.geolocation` then gets the better fixes automatically, with **no code changes**. Code work: only show the reported `accuracy` and tighten thresholds when it is under 1 m. (Web Bluetooth doesn't exist on iOS Safari, so cheap Bluetooth-only receivers won't work.) | Accuracy goes from meters to sub-meter or centimeters |
 
 > [!TIP]
-> If the brother will use it a lot near the water or ditches, M9 with an RTK receiver (about €250–500) is the single biggest safety upgrade. The `locationProvider` abstraction in M5 means nothing else needs to change.
+> If he uses it a lot near the water or ditches, an external receiver (M9) is the single biggest safety upgrade, and the web app benefits without any changes. Check before buying that the receiver supports **iOS Location Services override**.
 
 ---
 
@@ -306,7 +296,7 @@ left, and any deviations from the plan.
 
 ## 12. Decisions made
 
-1. **Device:** mostly iPhone. iOS comes first, with the native shell in M5b. Android stays supported through the same code.
+1. **Device:** mostly iPhone. **Web only (PWA), no native app**, because installing iOS apps is too much hassle. Android Chrome is supported through the same code.
 2. **Language:** English only.
 3. **Who adds objects:** both the admin and the walker. Walker additions are flagged *needs review* in the editor.
 4. **Area:** start with our plot. The design must allow adding neighbours' plots and the shore later (multiple `walkable_area`s, tiled routing grid, nothing hard-coded).
