@@ -16,6 +16,7 @@ export function DataPanel() {
     getEmpty,
   );
   const [email, setEmail] = useState(''),
+    [password, setPassword] = useState(''),
     [message, setMessage] = useState(''),
     [busy, setBusy] = useState(false),
     [confirmLogout, setConfirmLogout] = useState(false);
@@ -26,17 +27,12 @@ export function DataPanel() {
     setBusy(true);
     setMessage('');
     try {
-      const { error } = await client.auth.signInWithOtp({
-        email,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: new URL('/editor', window.location.origin).href,
-        },
-      });
-      setMessage(error ? text.signInFailed : text.linkSent);
+      const { error } = await client.auth.signInWithPassword({ email, password });
+      setMessage(error ? text.signInFailed : '');
     } catch {
       setMessage(text.signInFailed);
     } finally {
+      setPassword('');
       setBusy(false);
     }
   };
@@ -77,8 +73,17 @@ export function DataPanel() {
             value={email}
             onChange={(event) => setEmail(event.target.value)}
           />
+          <label htmlFor="sign-in-password">{text.password}</label>
+          <input
+            id="sign-in-password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
           <button className="control-button" disabled={busy || offline}>
-            {busy ? text.sending : text.signIn}
+            {busy ? text.signingIn : text.signIn}
           </button>
           <p role="status" aria-live="polite">
             {message}

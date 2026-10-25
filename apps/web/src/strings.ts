@@ -7,13 +7,13 @@ export const strings = {
     title: 'Map data',
     notConfigured: 'The map data connection is not configured yet.',
     signInHint:
-      'Sign in with your invited email address to load the approved map and save it for offline use.',
+      'Sign in with your email and password to save the approved map for offline use. Ask the administrator to create an account or reset a forgotten password.',
     email: 'Email address',
-    signIn: 'Send sign-in link',
-    sending: 'Sending…',
-    linkSent: 'If this address is invited, a sign-in link is on its way. Open it in this browser.',
+    password: 'Password',
+    signIn: 'Sign in',
+    signingIn: 'Signing in…',
     signInFailed:
-      'The sign-in link could not be sent. Check your connection or contact the administrator.',
+      'Sign-in failed. Check your email, password and connection, or contact the administrator.',
     signOut: 'Sign out',
     confirmSignOut: (count: number) => `Sign out and discard ${count} pending changes`,
     loading: 'Loading approved map data…',

@@ -36,13 +36,16 @@ work in CI and in the container; never disable package age/integrity protections
 Use the official Supabase stack supported by Coolify, with persistent volumes for
 Postgres and Storage. Check the VPS's available RAM, CPU, disk and existing workload
 before provisioning; do not assume the free managed tier's resource requirements.
-The hostname for the Supabase API is still to be chosen. Keep Studio/admin and
-database ports private. Only the authenticated API gateway should be exposed over TLS.
+The web app proxies only Auth, REST and Realtime under
+`https://alouna.leveris.lt/supabase`. Studio/admin and database ports stay private.
+No separate public API hostname or DNS record is needed.
 
 - Generate deployment credentials in the platform's protected configuration. Never
   commit passwords, JWT signing secrets, service-role keys or database connection strings.
-- Configure Auth `SITE_URL` and allowed magic-link redirects for
-  `https://alouna.leveris.lt`. Configure SMTP delivery before relying on magic-link login.
+- Configure Auth `SITE_URL=https://alouna.leveris.lt` and
+  `API_EXTERNAL_URL=https://alouna.leveris.lt/supabase`. Disable public signup,
+  anonymous and phone login. The owner selected email/password login after
+  checking `taskwardly-research`; SMTP and magic links are superseded.
 - Enable PostGIS, apply the M2 migration and RLS, and load the reviewed seed data.
 - Add scheduled database/volume backups and verify restoration before using field data.
 - Provide only `VITE_SUPABASE_URL` and the public `VITE_SUPABASE_ANON_KEY` to the web
@@ -64,3 +67,68 @@ the `/`, `/editor`, `/navigate` SPA routes, PWA files and exact local/live asset
 The browser renders the app shell and placeholder routes. The navigator/editor
 features and field validation remain later milestones. **Supabase is not provisioned
 yet**; its self-hosted schema/data layer is next (M2).
+
+## M2 configuration
+
+Use Coolify's supported Supabase compose bundle as one tested set. Its component
+images are pinned by the maintained bundle; do not update individual images
+blindly. Application dependencies remain at their latest policy-eligible stable
+releases (`pnpm -r outdated`). The current bundle's database is PostgreSQL 15;
+the SQL contract is also tested against PostgreSQL 17/PostGIS in CI. Plan a tested
+bundle/database-major upgrade separately from npm package updates.
+
+In the Supabase source Compose:
+
+- Set GoTrue signup disabled, email/password enabled, anonymous/phone login
+  disabled and email autoconfirm disabled. Admin-created accounts use explicit
+  `email_confirm=true` and do not send an email.
+- Use the same-origin URLs above as literals. Remove the generated
+  `SERVICE_URL_SUPABASEKONG_8000` declaration and replace the other
+  `${SERVICE_URL_SUPABASEKONG}` references with the same-origin API URL, otherwise
+  Coolify regenerates a public gateway domain when parsing the template.
+- Add only `supabase-kong` to the existing external `coolify` network. Keep every
+  other service on the stack's private network. Remove the generated Kong domain
+  and verify that Domains shows **No domains configured** before deploying.
+- Do not publish host ports for PostgreSQL, Studio, MinIO or the pooler.
+
+Web Coolify environment:
+
+```dotenv
+# Build-time, public:
+VITE_SUPABASE_URL=https://alouna.leveris.lt/supabase
+VITE_SUPABASE_ANON_KEY=the-platform-generated-public-anon-key
+# Runtime, private Docker upstream (replace the service UUID):
+ALOUNA_SUPABASE_UPSTREAM=supabase-kong-SERVICE_UUID:8000
+```
+
+nginx uses a runtime DNS lookup to survive container replacement. Its route
+allowlist rejects Studio, metadata and all other gateway paths. Workbox excludes
+API navigations from the SPA fallback and never caches Auth/API responses.
+
+Apply the migration and generated seed using `docker exec -i supabase-db-SERVICE_UUID
+psql -U postgres -d postgres -v ON_ERROR_STOP=1`, with each file on stdin. The SQL
+permission test can then run against the new instance: its fixtures roll back.
+Do not run `bootstrap.sql` or the CI-only concurrent test on the instance.
+
+Create the first administrator from a private server terminal:
+
+```sh
+python3 scripts/create-member.py --stack SERVICE_UUID --email OWNER_EMAIL --role admin
+```
+
+The owner enters and repeats the password in the hidden terminal prompt. The
+helper uses the private GoTrue Admin API and writes the profile only after Auth
+creation succeeds. It never puts the password in argv, environment, shell history
+or output. Add walkers using `--role walker`; use `--reset-password` with the
+intended role for an explicit administrator password reset. No service key is
+copied out of the VPS or embedded in browser assets. Never enable public signup
+as an account-bootstrap shortcut.
+
+Coolify's native database backup is scheduled at **01:00 UTC daily**, with local
+retention **14 copies / 14 days / 2 GB** and a missing-backup alert after two days.
+Run it after seeding and test restoration into a separate temporary database.
+Local backups protect against accidental data changes; they share the VPS failure
+domain. No validated remote S3 destination was configured during this setup.
+Keep an encrypted copy of the protected Coolify stack configuration/JWT secrets
+alongside any operator-managed off-site backup. Storage uploads are not used in
+M2; add object-storage backups before introducing uploaded media.

@@ -203,7 +203,7 @@ declare
   result jsonb;
 begin
   if actor is distinct from expected_actor or actor is null or not alouna_private.is_member() then raise exception 'Membership required' using errcode = '42501'; end if;
-  if operation_id is null or feature_id is null or expected_revision is null or expected_revision < 0 or action not in ('upsert','delete') then
+  if operation_id is null or feature_id is null or expected_revision is null or expected_revision < 0 or action is null or action not in ('upsert','delete') then
     raise exception 'Invalid mutation' using errcode = '22023';
   end if;
   perform pg_advisory_xact_lock(hashtextextended(actor::text || operation_id::text,0));
@@ -290,5 +290,7 @@ revoke all on function public.routing_snapshot(uuid), public.mutate_feature(uuid
 grant execute on function public.routing_snapshot(uuid), public.mutate_feature(uuid,uuid,uuid,bigint,text,jsonb),public.mutate_rule(uuid,uuid,text,bigint,jsonb) to authenticated;
 revoke all on all functions in schema alouna_private from public;
 grant execute on function alouna_private.is_member(),alouna_private.is_admin() to authenticated;
+revoke all on all tables in schema alouna_private from public,anon,authenticated;
+revoke all on all sequences in schema alouna_private from public,anon,authenticated;
 notify pgrst, 'reload schema';
 commit;

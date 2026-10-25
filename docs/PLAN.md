@@ -234,7 +234,7 @@ On the phone, available in the navigator settings and in the editor on mobile:
 - The navigator publishes `{user_id, lon, lat, accuracy, heading, speed, destination_id, route_progress, ts}` every **1–2 s** on the Supabase Realtime **broadcast** channel `live-positions`. **Presence** tracks who is online.
 - Optionally insert one row every 10 s into `tracks` for history and debugging (with a retention setting).
 - The editor subscribes to the channel and renders the markers.
-- Auth: Supabase email magic link. Roles: `admin` (editor plus everything, including rules and deleting anyone's features) and `walker` (navigator; **can read and add features**, and edit or delete only their own). Use RLS policies accordingly. In the editor, admins see features added by walkers highlighted as _needs review_ (`reviewed boolean default false`).
+- Auth override (25 October 2026): Supabase email and password login, following the owner's SMTP-free `taskwardly-research` approach. Accounts are provisioned by the server administrator; public signup stays disabled. Email magic links are superseded. Roles: `admin` (editor plus everything, including rules and deleting anyone's features) and `walker` (navigator; **can read and add features**, and edit or delete only their own). Use RLS policies accordingly. In the editor, admins see features added by walkers highlighted as _needs review_ (`reviewed boolean default false`).
 
 ---
 

@@ -8,6 +8,7 @@ import { createTileCache } from './tileCache';
 import { parseSnapshot } from './validation';
 import { BackendError, type DataBackend, type Mutation, type Profile } from './types';
 import { createSupabase } from './supabase';
+import { createStore, set } from 'idb-keyval';
 
 const profile: Profile = { id: 'alice', display_name: 'Alice', role: 'admin', active: true };
 const snapshot = parseSnapshot({ version: '1', features: [], rules: DEFAULT_RULES });
@@ -15,7 +16,11 @@ const draft = {
   kind: 'save-feature',
   entityId: 'feature-a',
   expectedRevision: 0,
-  payload: { name: 'Tree', category: 'obstacle', geometry: { type: 'Point', coordinates: [25, 55] } },
+  payload: {
+    name: 'Tree',
+    category: 'obstacle',
+    geometry: { type: 'Point', coordinates: [25, 55] },
+  },
 } as const;
 function fixture() {
   const db = crypto.randomUUID();
@@ -62,6 +67,39 @@ function fixture() {
 }
 
 describe('persistent offline data', () => {
+  it('keeps pending edits if a cached map becomes corrupt', async () => {
+    const f = fixture();
+    await f.store.sync();
+    await f.store.enqueue(draft);
+    const value = await f.storage.read();
+    await set(
+      'https://example.test/supabase:alice',
+      { ...value, snapshot: { ...snapshot, features: [{}] } },
+      createStore(f.db, 'accounts'),
+    );
+    const restored = await f.storage.read();
+    expect(restored.error).toBe('invalid-data');
+    expect(restored.snapshot).toBeNull();
+    expect(restored.queue).toEqual(value.queue);
+    await f.store.sync();
+    expect(f.store.getSnapshot().queue).toEqual([]);
+  });
+  it('fails closed if IndexedDB cannot persist a downloaded map', async () => {
+    const f = fixture();
+    const broken = new FeatureStore(
+      'alice',
+      {
+        ...f.storage,
+        update: async () => {
+          throw new Error('Quota');
+        },
+      },
+      f.backend,
+    );
+    await broken.sync();
+    expect(broken.getSnapshot().error).toBe('invalid-data');
+    expect(broken.getSnapshot().snapshot).toBeNull();
+  });
   it('reopens approved data and queued edits without changing the routing snapshot', async () => {
     const f = fixture();
     await f.store.sync();
