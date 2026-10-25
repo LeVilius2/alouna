@@ -12,22 +12,22 @@
 
 ## 1. Tech stack
 
-| Layer           | Choice                                                                                                  | Why                                                                            |
-| --------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Language        | **TypeScript** everywhere                                                                               | One language. Codex handles it well.                                           |
-| Monorepo        | **pnpm workspaces**                                                                                     | `apps/web` + `packages/core`                                                   |
-| Frontend        | **React 18 + Vite + React Router**                                                                      | One app with two routes: `/editor` and `/navigate`                             |
-| Map             | **MapLibre GL JS** (via `react-map-gl/maplibre`)                                                        | Free, fast vector/raster maps, no API key                                      |
-| Drawing/editing | **Terra Draw** (`terra-draw` + MapLibre adapter)                                                        | Point, line, and polygon drawing plus vertex editing                           |
-| Basemap         | **Lithuanian orthophoto ORT10LT** (geoportal.lt WMS/WMTS), with OSM and Esri World Imagery as fallbacks | Aerial imagery where you can see the property itself                           |
-| Geometry        | **Turf.js** + **proj4** (EPSG:3346 LKS94 ↔ WGS84)                                                       | Buffers, distances, and LKS94 import (the old repo used LKS94)                 |
-| Routing         | **Custom grid A\*** in `packages/core`, run in a **Web Worker**                                         | Applies the rules with costs (details in §4)                                   |
-| Audio           | **Web Audio API** (oscillators + `StereoPannerNode`) + **SpeechSynthesis**                              | Sonar pings, left/right panning, spoken prompts                                |
-| Backend         | **Supabase** (Postgres + **PostGIS**, Auth, **Realtime**)                                               | Stores features, rules, and users; streams live locations; free tier is enough |
-| Offline         | **vite-plugin-pwa** (Workbox) + **IndexedDB** (`idb-keyval`)                                            | Lakeside mobile signal can be weak. Navigation must work offline.              |
-| Tests           | **Vitest** (core logic), **Playwright** (smoke)                                                         | Routing and guidance math must be unit-tested                                  |
-| Hosting         | **Cloudflare Pages / Netlify / Vercel** (HTTPS required for GPS and compass)                            | Free, auto-deploys from GitHub                                                 |
-| Platform        | **Web only (PWA)**, iPhone Safari first, Android Chrome supported                                       | No app installs: open a link, "Add to Home Screen"                             |
+| Layer           | Choice                                                                                                  | Why                                                                                                 |
+| --------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Language        | **TypeScript** everywhere                                                                               | One language. Codex handles it well.                                                                |
+| Monorepo        | **pnpm workspaces**                                                                                     | `apps/web` + `packages/core`                                                                        |
+| Frontend        | **React 18 + Vite + React Router**                                                                      | One app with two routes: `/editor` and `/navigate`                                                  |
+| Map             | **MapLibre GL JS** (via `react-map-gl/maplibre`)                                                        | Free, fast vector/raster maps, no API key                                                           |
+| Drawing/editing | **Terra Draw** (`terra-draw` + MapLibre adapter)                                                        | Point, line, and polygon drawing plus vertex editing                                                |
+| Basemap         | **Lithuanian orthophoto ORT10LT** (geoportal.lt WMS/WMTS), with OSM and Esri World Imagery as fallbacks | Aerial imagery where you can see the property itself                                                |
+| Geometry        | **Turf.js** + **proj4** (EPSG:3346 LKS94 ↔ WGS84)                                                       | Buffers, distances, and LKS94 import (the old repo used LKS94)                                      |
+| Routing         | **Custom grid A\*** in `packages/core`, run in a **Web Worker**                                         | Applies the rules with costs (details in §4)                                                        |
+| Audio           | **Web Audio API** (oscillators + `StereoPannerNode`) + **SpeechSynthesis**                              | Sonar pings, left/right panning, spoken prompts                                                     |
+| Backend         | **Self-hosted Supabase on the existing VPS** (Postgres + **PostGIS**, Auth, **Realtime**)               | Stores features, rules, and users; streams live locations; verify VPS resources before provisioning |
+| Offline         | **vite-plugin-pwa** (Workbox) + **IndexedDB** (`idb-keyval`)                                            | Lakeside mobile signal can be weak. Navigation must work offline.                                   |
+| Tests           | **Vitest** (core logic), **Playwright** (smoke)                                                         | Routing and guidance math must be unit-tested                                                       |
+| Hosting         | **Existing Hostinger VPS via Coolify**, web at `alouna.leveris.lt` (HTTPS required)                     | Owner-selected hosting; Dockerfile builds from GitHub, nginx serves the PWA                         |
+| Platform        | **Web only (PWA)**, iPhone Safari first, Android Chrome supported                                       | No app installs: open a link, "Add to Home Screen"                                                  |
 
 ---
 
@@ -43,7 +43,7 @@ flowchart LR
     Router --> Guide
     Guide --> Audio["Sonar audio + speech (+ vibration on Android)"]
   end
-  subgraph Cloud["Supabase"]
+  subgraph Cloud["Supabase (same VPS, private database)"]
     DB[("Postgres + PostGIS: features, rules, profiles, tracks")]
     RT["Realtime channel: live positions"]
   end
@@ -133,14 +133,15 @@ create table tracks (id bigserial primary key, user_id uuid, ts timestamptz, lon
 2. **Rasterize** to a grid over the bbox of all _enabled_ `walkable_area`s plus a 20 m margin. Cell size **0.5 m** (configurable). A 300 × 300 m area gives 360k cells, which is fine in a worker.
    - **Built to grow (neighbours, shore):** the grid is split into **64 × 64 m tiles**, which are rasterized lazily and cached per tile and data version. A\* only loads the tiles it reaches. When the total area gets large (over about 1 km²), cell size is raised to 1.0 m automatically. Don't hard-code any bbox or property ID anywhere.
    - Initialize each cell: inside any enabled `walkable_area` → default cost 1.0. Outside → blocked.
+   - Union all enabled walkable polygons before rasterization so adjoining plots stay connected. Require whole-cell coverage of that union, including holes. Inflate obstacle coverage by a half-cell diagonal to avoid missed thin geometry.
    - Paint features in ascending `priority`. Lines are buffered by `width_m/2`, points by `radius_m`.
    - Blocked categories are inflated by `buffer_m` (safety margin).
-   - **Overrides are painted last:** cells covered by a `crossing` become passable even where `road` blocked them, and the same for `gate` over `fence` and `dock` over `water`. This is how "cross the road only at a crossing" works: the road is a wall everywhere else.
+   - **Overrides are painted last:** cells covered by a `crossing` become passable even where `road` blocked them, and the same for `gate` over `fence` and `dock` over `water`. Overrides remove only their explicitly named blocker categories and never reopen outside the walkable union. Overlapping unrelated hazards remain blocked. This is how "cross the road only at a crossing" works: the road is a wall everywhere else.
 3. **A\*** with 8-connectivity, octile heuristic, and cost = distance × cell cost. Add a small **clearance penalty**: a cell's cost goes up near blocked cells (distance transform), so routes stay in the middle of paths and away from hazards.
 4. **Smooth** with line-of-sight string pulling. A segment may skip cells only if every cell along it is passable _and_ has a cost no higher than its endpoints. This keeps the route on paths and inside crossings.
 5. **Output** a polyline of waypoints in WGS84, plus annotated **events**: "enter crossing at waypoint 4", "steps at 32 m", "turn left 70°".
 6. Cache the grid per data version (hash of features + rules) in IndexedDB. Rebuild only when the data changes.
-7. **Snap start/end:** if the user's GPS position falls in a blocked cell (GPS noise), snap to the nearest passable cell and say so.
+7. **Snap start/end:** if the user's GPS position falls in a blocked cell (GPS noise), snap to the nearest passable cell within a bounded search (2 m default; configurable up to 15 m) and return an explicit notice. If none is close enough, return a blocked-endpoint failure. M5 must handle the notice before guiding; never guide across the unchecked original-to-snapped segment.
 
 Unit tests (Vitest), each with a tiny synthetic map:
 
@@ -270,7 +271,7 @@ alouna/
 
 | #                                  | Milestone                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Done when                                                                                  |
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| **M0**                             | Scaffold: pnpm monorepo, Vite React TS, Vitest, ESLint/Prettier, AGENTS.md, CI (GitHub Actions: lint + test + build), deploy to Pages                                                                                                                                                                                                                                                                                                                                                  | The empty app is live on HTTPS                                                             |
+| **M0**                             | Scaffold: pnpm monorepo, Vite React TS, Vitest, ESLint/Prettier, AGENTS.md, CI (GitHub Actions: lint + test + build), deploy via Dockerfile to the existing Coolify VPS                                                                                                                                                                                                                                                                                                                | The empty app is live on HTTPS                                                             |
 | **M1**                             | `packages/core`: projection, geo math, rules types and defaults, rasterize, A\*, smoothing, route events. Full unit tests from §4.                                                                                                                                                                                                                                                                                                                                                     | `pnpm test` is green. The road/crossing test passes.                                       |
 | **M2**                             | Supabase: migration, RLS, seed from old GeoJSON. Data layer with an IndexedDB cache and offline queue.                                                                                                                                                                                                                                                                                                                                                                                 | Features load in the app offline after the first visit                                     |
 | **M3**                             | Editor: map + orthophoto, Terra Draw editing, feature panel, rules panel, import (GeoJSON/KML/GPX/CSV/LKS94), export                                                                                                                                                                                                                                                                                                                                                                   | You can draw and import the property, toggle neighbour areas on and off, and edits persist |
@@ -305,3 +306,6 @@ left, and any deviations from the plan.
 2. **Language:** English only.
 3. **Who adds objects:** both the admin and the walker. Walker additions are flagged _needs review_ in the editor.
 4. **Area:** start with our plot. The design must allow adding neighbours' plots and the shore later (multiple `walkable_area`s, tiled routing grid, nothing hard-coded).
+
+5. **Hosting override (25 October 2026):** both the web application and Supabase run on the existing Hostinger/Coolify VPS. The web hostname is `alouna.leveris.lt`. Netlify/Pages/Vercel and the managed free tier are superseded. Supabase provisioning, backups, private Studio/database access and Auth SMTP configuration belong to M2; see `docs/DEPLOYMENT.md`.
+6. **Dependencies:** keep project packages at the latest stable, policy-eligible versions, testing upgrades and documenting necessary compatibility adapters.

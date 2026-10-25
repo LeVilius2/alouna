@@ -15,6 +15,10 @@ before deviating.
 - When a milestone is finished, tick it in the Progress section and add short notes
   (what was built, deviations, known issues).
 - Before finishing: run lint, tests and build — all must pass.
+- Keep this project's packages at their latest stable releases (owner preference,
+  25 October 2026). Check `pnpm -r outdated`, upgrade and verify compatibility as
+  part of ongoing work. Honor the environment's release-age and integrity policy.
+  Use supported compatibility adapters where necessary; document any remaining pin.
 
 ## Conventions
 
@@ -32,7 +36,9 @@ before deviating.
 
 ## Commands
 
-Requires Node ≥ 20 (22 recommended, see `.nvmrc`) and pnpm 9 (`corepack enable`).
+Requires Node ≥ 24.19 (24 LTS, see `.nvmrc`) and pnpm 12.15.0 (see `packageManager`).
+TypeScript 7 supplies `tsc`; Microsoft's TypeScript 6 API compatibility alias is used
+by typescript-eslint until its native-compiler API support is ready.
 
 ```
 pnpm install
@@ -49,7 +55,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, test and build on every pu
 ## Progress
 
 - [x] M0 – Scaffold, CI, deploy config
-- [ ] M1 – Core: geo, rules, routing (+ tests)
+- [x] M1 – Core: geo, rules, routing (+ tests)
 - [ ] M2 – Supabase schema, RLS, seed, offline data layer
 - [ ] M3 – Editor: map, drawing, rules panel, import/export
 - [ ] M4 – Editor: route tester, cost overlay, walk simulator
@@ -69,8 +75,31 @@ _(agents: append milestone notes here)_
 - Routes: `/` (mode chooser), `/navigate` and `/editor` (placeholders), `*` (not found). Router defined in `apps/web/src/router.tsx`; tests use `createMemoryRouter(routes)`.
 - `packages/core/src/geo/sphere.ts`: `distanceMeters`, `bearingDegrees`, `normalizeDegrees`, `signedAngleDiff` (+ tests). Coordinates are `[lon, lat]`.
 - Strings in `apps/web/src/strings.ts`; global styles in `apps/web/src/styles.css` (big accessible buttons).
-- PWA manifest + icons in `apps/web/public` (icons are generated placeholders). `_redirects` provides SPA fallback.
-- Deploy: `netlify.toml` (build `pnpm build`, publish `apps/web/dist`). Cloudflare Pages works with the same settings. The site itself must be connected by the owner in the Netlify/Cloudflare dashboard.
+- PWA manifest + icons in `apps/web/public` (icons are generated placeholders).
+- Hosting override (25 October 2026): use the owner's existing Hostinger/Coolify VPS
+  for **both the web app and Supabase**. Web hostname: `alouna.leveris.lt`.
+  `Dockerfile` + `deploy/nginx.conf` replace Netlify/Pages configuration. See
+  `docs/DEPLOYMENT.md`. Supabase provisioning/schema remain M2 work.
 - Versions deviate from the plan's "React 18": the current React 19 / React Router 8 / Vite 8 / Vitest 5 are used.
-- Pins: **TypeScript ^6** (typescript-eslint does not support TS 7 yet); **jsdom ^26** (newer jsdom needs Node ≥ 22.15).
+- Dependency updates: TypeScript 7 + official TS6 compatibility alias, jsdom 30,
+  Node 24 LTS and pnpm 12.15.0. Do not restore the superseded TS6/jsdom26 pins.
 - Playwright smoke tests are deferred until there are real screens (M3/M5).
+
+### M1 (done)
+
+- Pure core: proj4 WGS84/LKS94 projection, planar geometry/polyline helpers, typed
+  feature/rule model and all default categories. Internal coordinates are
+  `[easting, northing]` metres; API/storage coordinates are `[longitude, latitude]`.
+- Lazy 64 m tiles, 0.5 m cells (at least 1 m above 1 km²), enabled-area union,
+  physical widths/radii, safety buffers, priority costs, and category-specific overrides.
+- Heap-based eight-neighbour A*, octile heuristic, clearance penalty, no corner
+  cutting, supercover cost-preserving smoothing, semantic route events, bounded snaps.
+- Worker entry/protocol and reusable tiles keyed by a full versioned snapshot.
+  IndexedDB persistence remains M2. UI/worker lifecycle remains M4/M5.
+- Tests cover the five required routing cases, unrelated overlapping hazards,
+  polygon holes/invalid topology, thin fences, disabled/adjoining plots, tile growth,
+  cache invalidation, endpoint/search failures and events. See `docs/CORE.md`.
+- Safety clarifications to the plan: only named blockers are overridden; whole-cell
+  footprints are conservative; endpoint snapping returns notices and has a distance cap.
+- VPS Dockerfile/nginx deployment replaces Pages; Supabase self-hosting is recorded
+  for M2. Dependencies updated, with the official TS6 API adapter needed by ESLint.

@@ -14,7 +14,12 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^6.0.3",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "@turf/union": "^7.4.0",
+    "proj4": "^2.22.0"
   }
 }
