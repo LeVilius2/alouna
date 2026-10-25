@@ -30,15 +30,15 @@ select pg_temp.expect_error($q$select public.routing_snapshot('00000000-0000-000
 -- Walker creates a draft; no self approval or direct role mutation is possible.
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
 select public.mutate_feature('00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001',0,'upsert',
- '{"name":"Test tree","category":"tree","geometry":{"type":"Point","coordinates":[25,55]},"reviewed":true}');
+ '{"name":"Test tree","category":"obstacle","geometry":{"type":"Point","coordinates":[25,55]},"reviewed":true}');
 select pg_temp.assert_true((select not reviewed and published is null and revision=1 from public.features where id='20000000-0000-0000-0000-000000000001'),'Walker self-approved');
 select pg_temp.expect_error($q$update public.profiles set role='admin'$q$,'42501');
 select pg_temp.expect_error($q$update public.features set reviewed=true$q$,'42501');
 select pg_temp.expect_error($q$delete from public.features$q$,'42501');
-select pg_temp.expect_error($q$select public.mutate_rule('00000000-0000-0000-0000-000000000002',gen_random_uuid(),'tree',1,'{}')$q$,'42501');
+select pg_temp.expect_error($q$select public.mutate_rule('00000000-0000-0000-0000-000000000002',gen_random_uuid(),'obstacle',1,'{}')$q$,'42501');
 -- Replayed acknowledgement returns the receipt, without a revision increment.
 select public.mutate_feature('00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001',0,'upsert',
- '{"name":"Test tree","category":"tree","geometry":{"type":"Point","coordinates":[25,55]},"reviewed":true}');
+ '{"name":"Test tree","category":"obstacle","geometry":{"type":"Point","coordinates":[25,55]},"reviewed":true}');
 select pg_temp.assert_true((select revision=1 from public.features where id='20000000-0000-0000-0000-000000000001'),'Duplicate replay mutated twice');
 select pg_temp.expect_error($q$select public.mutate_feature('00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001',0,'delete','{}')$q$,'22023');
 select pg_temp.expect_error($q$select public.mutate_feature('00000000-0000-0000-0000-000000000002',gen_random_uuid(),'20000000-0000-0000-0000-000000000001',0,'upsert','{}')$q$,'40001');
@@ -52,11 +52,11 @@ select pg_temp.expect_error($q$select public.routing_snapshot('00000000-0000-000
 -- Admin approval publishes it. Pending walker edits/deletions preserve that exact snapshot.
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
 select public.mutate_feature('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'20000000-0000-0000-0000-000000000001',1,'upsert',
- '{"name":"Approved tree","category":"tree","geometry":{"type":"Point","coordinates":[25,55]}}');
+ '{"name":"Approved tree","category":"obstacle","geometry":{"type":"Point","coordinates":[25,55]}}');
 select pg_temp.assert_true((select published->'properties'->>'name'='Approved tree' and created_by='00000000-0000-0000-0000-000000000002' from public.features where id='20000000-0000-0000-0000-000000000001'),'Approval/ownership incorrect');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
 select public.mutate_feature('00000000-0000-0000-0000-000000000002',gen_random_uuid(),'20000000-0000-0000-0000-000000000001',2,'upsert',
- '{"name":"Pending move","category":"tree","geometry":{"type":"Point","coordinates":[26,55]},"reviewed":true}');
+ '{"name":"Pending move","category":"obstacle","geometry":{"type":"Point","coordinates":[26,55]},"reviewed":true}');
 select pg_temp.assert_true((select published->'properties'->>'name'='Approved tree' and not reviewed from public.features where id='20000000-0000-0000-0000-000000000001'),'Pending move changed routing');
 select public.mutate_feature('00000000-0000-0000-0000-000000000002',gen_random_uuid(),'20000000-0000-0000-0000-000000000001',3,'delete','{}');
 select pg_temp.assert_true((select published is not null and deleted_at is not null from public.features where id='20000000-0000-0000-0000-000000000001'),'Pending delete removed routing obstacle');
@@ -64,9 +64,9 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001'
 select public.mutate_feature('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'20000000-0000-0000-0000-000000000001',4,'delete','{}');
 select pg_temp.assert_true((select published is null from public.features where id='20000000-0000-0000-0000-000000000001'),'Admin delete not published');
 -- Rule RPC: successful versioned mutation, stale conflict and invalid override.
-select public.mutate_rule('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'tree',1,
+select public.mutate_rule('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'obstacle',1,
  '{"label":"Tree","passable":false,"cost":1,"buffer_m":1,"warn_m":2,"overrides":[],"priority":1,"color":"#112233"}');
-select pg_temp.expect_error($q$select public.mutate_rule('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'tree',1,'{}')$q$,'40001');
+select pg_temp.expect_error($q$select public.mutate_rule('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'obstacle',1,'{}')$q$,'40001');
 select pg_temp.expect_error($q$select public.mutate_rule('00000000-0000-0000-0000-000000000001',gen_random_uuid(),'bad',0,'{"label":"Bad","passable":true,"cost":1,"buffer_m":0,"overrides":["missing"],"priority":1,"color":"#112233"}')$q$,'22023');
 -- Tracks are private to the contributor/admin.
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);

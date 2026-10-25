@@ -15,7 +15,7 @@ const draft = {
   kind: 'save-feature',
   entityId: 'feature-a',
   expectedRevision: 0,
-  payload: { name: 'Tree', category: 'tree', geometry: { type: 'Point', coordinates: [25, 55] } },
+  payload: { name: 'Tree', category: 'obstacle', geometry: { type: 'Point', coordinates: [25, 55] } },
 } as const;
 function fixture() {
   const db = crypto.randomUUID();
