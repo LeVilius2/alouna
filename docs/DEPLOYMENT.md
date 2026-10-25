@@ -124,9 +124,23 @@ intended role for an explicit administrator password reset. No service key is
 copied out of the VPS or embedded in browser assets. Never enable public signup
 as an account-bootstrap shortcut.
 
-Coolify's native database backup is scheduled at **01:00 UTC daily**, with local
-retention **14 copies / 14 days / 2 GB** and a missing-backup alert after two days.
-Run it after seeding and test restoration into a separate temporary database.
+The full backup script `scripts/backup-database.sh` runs as root at **01:00 UTC
+daily**, retaining **14 copies / 14 days / 2 GB** under
+`/data/coolify/backups/alouna` (directory 0700, files 0600). It uses an atomic
+rename, verifies the dump catalog, writes SHA-256 checksums and serializes runs
+with `flock`. Cron writes success/failure output to `/root/alouna-ops/backup.log`.
+Check that log and backup timestamps during operations; an external failure
+notification channel is not configured.
+
+Coolify's default native `pg_dump` uses `--no-acl --no-owner`. Its initial backup
+restored the rows but failed permission verification, so that schedule is disabled.
+The replacement includes the original owners and grants. To test a new backup,
+create a separate disposable database from `template0`, restore it with
+`pg_restore -U supabase_admin --exit-on-error` (preserve owners/ACLs), run
+`supabase/tests/rls.sql` there, and remove only that disposable database after the
+checks pass. Never restore over the live database as a test. A new VPS must first
+initialize the same Supabase bundle's system roles/extensions.
+
 Local backups protect against accidental data changes; they share the VPS failure
 domain. No validated remote S3 destination was configured during this setup.
 Keep an encrypted copy of the protected Coolify stack configuration/JWT secrets
