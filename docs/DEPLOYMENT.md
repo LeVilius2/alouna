@@ -128,17 +128,19 @@ The full backup script `scripts/backup-database.sh` runs as root at **01:00 UTC
 daily**, retaining **14 copies / 14 days / 2 GB** under
 `/data/coolify/backups/alouna` (directory 0700, files 0600). It uses an atomic
 rename, verifies the dump catalog, writes SHA-256 checksums and serializes runs
-with `flock`. Cron writes success/failure output to `/root/alouna-ops/backup.log`.
+with `flock`. Each dump has a `.graphql.sql` companion containing Supabase's
+generated GraphQL wrapper (its grants are dumped without its definition), plus
+checksums for both files. Keep all companion files with the dump. Cron writes success/failure output to `/root/alouna-ops/backup.log`.
 Check that log and backup timestamps during operations; an external failure
 notification channel is not configured.
 
 Coolify's default native `pg_dump` uses `--no-acl --no-owner`. Its initial backup
 restored the rows but failed permission verification, so that schedule is disabled.
 The replacement includes the original owners and grants. To test a new backup,
-create a separate disposable database from `template0`, restore it with
-`pg_restore -U supabase_admin --exit-on-error` (preserve owners/ACLs), run
-`supabase/tests/rls.sql` there, and remove only that disposable database after the
-checks pass. Never restore over the live database as a test. A new VPS must first
+run `scripts/verify-restore.sh SERVICE_UUID DUMP_PATH alouna_m2_restore_verify`.
+It creates a separate database from `template0`, restores schema then the generated
+GraphQL wrapper, data and permission grants, and runs the SQL access checks.
+Remove only that disposable database after the checks pass. Never restore over the live database as a test. A new VPS must first
 initialize the same Supabase bundle's system roles/extensions.
 
 Local backups protect against accidental data changes; they share the VPS failure
