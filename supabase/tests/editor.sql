@@ -8,6 +8,10 @@ insert into public.profiles(id,role,display_name) values
  ('00000000-0000-0000-0000-0000000000a1','admin','Admin'),
  ('00000000-0000-0000-0000-0000000000a2','walker','Walker A'),
  ('00000000-0000-0000-0000-0000000000a3','walker','Walker B');
+-- Imported/seeded features have no Auth creator. They must have a boolean own=false.
+insert into public.features(id,name,category,geom,reviewed,created_by) values
+ ('30000000-0000-0000-0000-000000000002','Ownerless import','landmark',
+  extensions.st_setsrid(extensions.st_makepoint(25.695,55.636),4326),true,null);
 create function pg_temp.assert_true(ok boolean, message text) returns void language plpgsql as $$ begin if ok is distinct from true then raise exception '%',message; end if; end $$;
 create function pg_temp.expect_error(statement text, expected_code text) returns void language plpgsql as $$
 begin
@@ -32,6 +36,13 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a4'
 select pg_temp.expect_error($q$select public.editor_features('00000000-0000-0000-0000-0000000000a4')$q$,'42501');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a2',true);
 select pg_temp.expect_error($q$select public.editor_features('00000000-0000-0000-0000-0000000000a3')$q$,'42501');
+select pg_temp.assert_true((select x->'own'='false'::jsonb
+  from pg_temp.item('00000000-0000-0000-0000-0000000000a2','30000000-0000-0000-0000-000000000002') x),'Walker ownership flag for imported feature is not false');
+select pg_temp.expect_error($q$select public.mutate_feature('00000000-0000-0000-0000-0000000000a2',gen_random_uuid(),'30000000-0000-0000-0000-000000000002',1,'delete','{}')$q$,'42501');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a1',true);
+select pg_temp.assert_true((select x->'own'='false'::jsonb
+  from pg_temp.item('00000000-0000-0000-0000-0000000000a1','30000000-0000-0000-0000-000000000002') x),'Admin ownership flag for imported feature is not false');
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a2',true);
 
 -- Walker A submits: visible to A (pending-new, own) and admin, invisible to walker B.
 select public.mutate_feature('00000000-0000-0000-0000-0000000000a2',gen_random_uuid(),'30000000-0000-0000-0000-000000000001',0,'upsert',
