@@ -184,6 +184,7 @@ describe('EditorPage', () => {
     await waitFor(() => expect(store.getSnapshot().queue).toHaveLength(0));
     expect(toggle).not.toBeChecked();
 
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Redo' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
     await waitFor(() => expect(store.getSnapshot().queue).toHaveLength(1));
     expect(toggle).toBeChecked();

@@ -200,9 +200,17 @@ _(agents: append milestone notes here)_
   test-only additions for the planned browser smoke tests and strict checks.
 - See `docs/EDITOR.md` for use and validation. Chromium smoke tests cover actual
   map clicks, the worker, crossing route, exact overlay, cache persistence,
-  simulation and blocked endpoints. CI runs them after build. Production deployment
-  and real iPhone field testing have not been performed as part of M4.
+  simulation and blocked endpoints. CI runs them after build. Real iPhone field
+  testing remains M8.
 - Deployment follow-up: `0003_editor_owner_flag.sql` fixes M3's nullable `own`
   field for imported features without an Auth creator. The API returns `false`,
   preserving authority checks and the client's strict validation. SQL tests cover
   admin/walker reads plus denied walker mutation of an ownerless feature.
+- Deployed and verified on 26 October 2026: trusted HTTPS, redirects, health,
+  SPA/PWA files and exact live/local asset hashes, including both workers. The
+  authenticated editor loaded all six features at approved version 26 and
+  calculated an 82.7 m route. Exact 0.5 m cost cells, playback/pause and manual
+  turn/step controls worked live. Existing PWA tabs may need one reload.
+- Coolify currently deploys `main` through an existing webhook (observed during
+  this release); the M1 manual-deployment note is historical. No deployment or
+  security settings were changed. See `docs/DEPLOYMENT.md` for the release record.

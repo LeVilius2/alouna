@@ -171,6 +171,41 @@ ownership/review/idempotency/concurrency checks in CI. The production build has 
 non-blocking chunk-size warning; bundle splitting can be addressed with later UI
 work.
 
+## M4 release verification (26 October 2026)
+
+M4 was fast-forwarded to `main` as `d1b08b4`. During this release the existing
+Coolify **Webhook** source automatically deployed pushes to `main`; this supersedes
+the historical M1 manual-deployment behavior. No webhook or security setting was
+changed in this release. Coolify built the requested commit and completed a
+rolling update after the new container passed `/healthz`.
+
+Live verification found an M3 API defect: the six imported features have no Auth
+creator, so `editor_features` returned `own: null`. Strict client validation
+correctly rejected that working set. Migration
+`supabase/migrations/0003_editor_owner_flag.sql` returns `own: false` instead,
+without changing ownership, map features or mutation authority. The migration was
+downloaded by immutable commit `6cf80bc`, checked against its local SHA-256, and
+applied through the private VPS terminal with `psql -v ON_ERROR_STOP=1`. Its SQL
+regression checks passed in CI, including denied walker mutation of an ownerless
+feature. Sync then loaded the six approved features at unchanged version **26**.
+
+External probes verified trusted HTTPS, a 307 HTTP-to-HTTPS redirect, 200 responses
+for `/`, `/editor`, `/navigate` and `/healthz`, and correct manifest/worker MIME
+types. Every generated script, stylesheet, worker, HTML, manifest and service-worker
+hash matched the local production build. Anonymous feature access returned 401;
+Studio, Auth administration and invitation routes returned 404.
+
+In the authenticated live browser, map clicks calculated an **82.7 m** route using
+the deployed routing worker. A closer view displayed **3,906 exact 0.5 m cells**.
+Playback advanced, pause stopped it, and manual heading/step controls worked.
+These were read-only route tests; no production map edits were made. Existing
+PWA tabs may need one reload to adopt the new service worker.
+
+Local lint, strict typechecking/build and all **72 unit tests** passed; the two
+Chromium smoke tests also passed. Audio and real guidance remain M5 work, and
+real iPhone field testing remains M8. The build retains the existing non-blocking
+bundle-size warning.
+
 The complete backup was restored into a separate database with original owners,
 permission grants and generated GraphQL wrapper. The SQL access tests passed
 against that restored copy, which was then removed. The owner account was backed
