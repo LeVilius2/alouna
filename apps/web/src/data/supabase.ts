@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import { parseProfile, parseSnapshot } from './validation';
+import { parseEditorFeatures, parseProfile, parseSnapshot } from './validation';
 import { BackendError, type DataBackend } from './types';
 
 export function createSupabase(url: string, anonKey: string): SupabaseClient {
@@ -56,7 +56,17 @@ export function createBackend(client: SupabaseClient): DataBackend {
       const parsedProfile = parseProfile(profile, userId);
       const { data, error } = await client.rpc('routing_snapshot', { expected_actor: userId });
       check(error);
-      return { profile: parsedProfile, snapshot: parseSnapshot(data) };
+      const snapshot = parseSnapshot(data);
+      const { data: editorData, error: editorError } = await client.rpc('editor_features', {
+        expected_actor: userId,
+      });
+      // Gracefully fall back to the routing snapshot if the M3 migration isn't applied yet.
+      if (!editorError && editorData) {
+        snapshot.editorFeatures = parseEditorFeatures(editorData, snapshot.rules);
+      } else if (editorError && editorError.code !== 'PGRST202' && editorError.code !== '42883') {
+        check(editorError);
+      }
+      return { profile: parsedProfile, snapshot };
     },
     async mutate(userId, mutation) {
       const shared = {

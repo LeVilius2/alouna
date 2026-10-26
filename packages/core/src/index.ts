@@ -11,3 +11,7 @@ export * from './routing/events';
 export * from './routing/router';
 export * from './routing/worker-protocol';
 export { validateMap, validateProjectedPolygons } from './routing/validation';
+export * from './import/types';
+export * from './import/geojson';
+export * from './import/csv';
+export * from './import/crs';

@@ -86,6 +86,21 @@ export class FeatureStore {
     );
   }
 
+  /** Replace the pending queue (used by editor undo/redo for mutations that have not synced yet). */
+  replaceQueue(queue: readonly Mutation[]): Promise<void> {
+    return this.serialize(() =>
+      this.save((data) => {
+        if (!data.profile?.active) throw new BackendError('denied');
+        const problem = queue.find((m) => m.status !== 'pending');
+        return {
+          ...data,
+          queue: structuredClone([...queue]),
+          error: problem && problem.status !== 'pending' ? problem.status : null,
+        };
+      }),
+    );
+  }
+
   sync(): Promise<void> {
     return this.serialize(async () => {
       // Recheck membership before replaying persisted work, including after suspension.

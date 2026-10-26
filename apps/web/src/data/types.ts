@@ -6,11 +6,23 @@ export interface Profile {
   role: 'admin' | 'walker';
   active: boolean;
 }
+export type EditorStatus =
+  'approved' | 'pending-new' | 'pending-edit' | 'pending-delete' | 'deleted';
+
+export interface EditorFeatureItem {
+  feature: MapFeature;
+  published: MapFeature | null;
+  status: EditorStatus;
+  created_by_name: string;
+  own: boolean;
+}
+
 export interface Snapshot {
   version: string;
   features: MapFeature[];
   rules: CategoryRule[];
   fetchedAt: number;
+  editorFeatures?: EditorFeatureItem[];
 }
 export type FeaturePayload = {
   name: string;

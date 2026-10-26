@@ -10,11 +10,20 @@ export interface FeatureProperties {
   readonly category: string;
   readonly name?: string;
   readonly spoken_name?: string;
+  readonly notes?: string;
+  readonly source?: 'drawn' | 'gps' | 'import';
   readonly enabled?: boolean;
   readonly width_m?: number | null;
   readonly radius_m?: number | null;
   readonly is_destination?: boolean;
   readonly owner_label?: string;
+  readonly reviewed?: boolean;
+  readonly gps_accuracy_m?: number | null;
+  readonly created_by?: string | null;
+  readonly created_at?: string;
+  readonly updated_at?: string;
+  readonly deleted_at?: string | null;
+  readonly revision?: number;
 }
 
 export interface MapFeature {
@@ -34,4 +43,6 @@ export interface CategoryRule {
   readonly overrides: readonly string[];
   readonly priority: number;
   readonly color: string;
+  readonly revision?: number;
+  readonly updated_at?: string;
 }

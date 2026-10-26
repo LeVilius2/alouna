@@ -61,7 +61,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, test and build on every pu
 - [x] M0 – Scaffold, CI, deploy config
 - [x] M1 – Core: geo, rules, routing (+ tests)
 - [x] M2 – Supabase schema, RLS, seed, offline data layer
-- [ ] M3 – Editor: map, drawing, rules panel, import/export
+- [x] M3 – Editor: map, drawing, rules panel, import/export
 - [ ] M4 – Editor: route tester, cost overlay, walk simulator
 - [ ] M5 – Navigator (web): heading, location, guidance, sonar, speech, hazards
 - [ ] M6 – Live location (Realtime)
@@ -149,3 +149,32 @@ _(agents: append milestone notes here)_
   from IndexedDB; reconnecting/syncing refreshed the cache. Network overrides were
   removed. All 48 tests, SQL access/concurrency checks and build pass. iPhone field
   testing remains M8; map drawing starts in M3.
+
+### M3 (done)
+
+- `supabase/migrations/0002_editor.sql` + `supabase/tests/editor.sql`: `public.editor_features(expected_actor)`
+  returns the editor working set with status (`approved`, `pending-new`, `pending-edit`,
+  `pending-delete`, `deleted`), author display name and `own` flag, while keeping other
+  walkers' unapproved drafts private. Apply `0002_editor.sql` to the VPS database with
+  `psql -v ON_ERROR_STOP=1`; the client falls back to `routing_snapshot` until applied.
+- `@alouna/core` import module (`packages/core/src/import/`): GeoJSON (including
+  Multi\*/GeometryCollection explosion, Z-stripping, ring closure), CSV / pasted
+  coordinate text (headers, groups, Lithuanian decimal commas, point/line/polygon join),
+  and CRS auto-detection + conversion (`wgs84`, `wgs84-latlon`, `lks94`, `lks94-ne`).
+- Web KML/GPX import (`apps/web/src/editor/fileImport.ts`) via `@tmcw/togeojson` +
+  `DOMParser`, feeding the core import pipeline.
+- Editor UI (`apps/web/src/editor/`):
+  - `MapView` (lazy-loaded): MapLibre GL JS with Lithuanian orthophoto `ORT10LT`
+    dynamic export tiles (`{bbox-epsg-3857}`), Esri World Imagery and OSM basemap
+    switcher; Terra Draw modes for pan, select/vertex edit, point, obstacle circle
+    (converted to `Point` + `radius_m`), line and polygon.
+  - Walkable-area (plot) quick toggles for enabling/disabling neighbour plots, category
+    visibility legend, status/review filters, and soft-delete restore for admins.
+  - `FeaturePanel`: edits name, spoken TTS name, category, width/radius, owner label,
+    destination flag, enabled flag and notes; admin approve/publish & restore; conflict
+    discard; validates geometry and polygon topology before queuing.
+  - `RulesPanel`: admin editing of `category_rules` (passable, cost, buffer, warning
+    distance, priority, hex colour, overrides).
+  - `ImportExportPanel`: file/paste import with CRS + join selector and live preview;
+    full GeoJSON backup export of features and rules.
+  - Undo/redo of unsynced queue changes via `FeatureStore.replaceQueue`.
