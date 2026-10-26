@@ -10,6 +10,8 @@ export * from './routing/smooth';
 export * from './routing/events';
 export * from './routing/router';
 export * from './routing/worker-protocol';
+export * from './routing/debug';
+export * from './simulation/walk';
 export { validateMap, validateProjectedPolygons } from './routing/validation';
 export * from './import/types';
 export * from './import/geojson';

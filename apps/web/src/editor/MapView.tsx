@@ -1,11 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Map as MapLibreMap,
+  setWorkerUrl,
   type GeoJSONSource,
   type MapLayerMouseEvent,
   type StyleSpecification,
 } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
+import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import {
   TerraDraw,
   TerraDrawCircleMode,
@@ -16,8 +18,14 @@ import {
   type GeoJSONStoreFeatures,
 } from 'terra-draw';
 import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter';
-import type { CategoryRule, Geometry, LonLat } from '@alouna/core';
+import type { Bounds, CategoryRule, Geometry, LonLat } from '@alouna/core';
 import { circlePolygonToPoint, type EffectiveFeature } from './state';
+import { debugGeoJson, viewportBounds, type RouteMapOverlay } from './routeState';
+import { routeGeoJson, routeLayers } from './routeLayers';
+import { strings } from '../strings';
+
+// MapLibre 6 requires an explicit worker asset when consumed through a bundler.
+setWorkerUrl(mapWorkerUrl);
 
 export type BasemapId = 'orthophoto' | 'esri' | 'osm';
 export type DrawTool = 'pan' | 'select' | 'point' | 'circle' | 'line' | 'polygon';
@@ -73,6 +81,8 @@ function makeStyle(): StyleSpecification {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       },
+      'alouna-costs': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      'alouna-route': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     },
     layers: [
       {
@@ -83,6 +93,7 @@ function makeStyle(): StyleSpecification {
       },
       { id: 'base-esri', type: 'raster', source: 'esri', layout: { visibility: 'none' } },
       { id: 'base-osm', type: 'raster', source: 'osm', layout: { visibility: 'none' } },
+      routeLayers[0]!,
       {
         id: 'features-fill',
         type: 'fill',
@@ -120,6 +131,7 @@ function makeStyle(): StyleSpecification {
           'circle-stroke-color': ['case', ['==', ['get', 'selected'], true], '#ffd60a', '#ffffff'],
         },
       },
+      ...routeLayers.slice(1),
     ],
   };
 }
@@ -145,6 +157,10 @@ export function MapView({
   onSelect,
   onCreateFromDraw,
   onGeometryDraft,
+  routeOverlay,
+  routePicking,
+  onRoutePick,
+  onBounds,
 }: {
   features: readonly EffectiveFeature[];
   rules: readonly CategoryRule[];
@@ -158,16 +174,52 @@ export function MapView({
   onSelect: (id: string | null) => void;
   onCreateFromDraw: (geometry: Geometry, radius_m?: number) => void;
   onGeometryDraft: (geometry: Geometry) => void;
+  routeOverlay?: RouteMapOverlay | null;
+  routePicking?: boolean;
+  onRoutePick?: (point: LonLat) => void;
+  onBounds?: (bounds: Bounds) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const drawRef = useRef<TerraDraw | null>(null);
   const readyRef = useRef(false);
+  const [ready, setReady] = useState(false);
   const didInitialFitRef = useRef(false);
-  const callbacksRef = useRef({ onSelect, onCreateFromDraw, onGeometryDraft, tool, selectedId });
+  const routeActive = !!routeOverlay;
+  const callbacksRef = useRef({
+    onSelect,
+    onCreateFromDraw,
+    onGeometryDraft,
+    tool,
+    selectedId,
+    routePicking,
+    routeActive,
+    onRoutePick,
+    onBounds,
+  });
   useEffect(() => {
-    callbacksRef.current = { onSelect, onCreateFromDraw, onGeometryDraft, tool, selectedId };
-  }, [onSelect, onCreateFromDraw, onGeometryDraft, tool, selectedId]);
+    callbacksRef.current = {
+      onSelect,
+      onCreateFromDraw,
+      onGeometryDraft,
+      tool,
+      selectedId,
+      routePicking,
+      routeActive,
+      onRoutePick,
+      onBounds,
+    };
+  }, [
+    onSelect,
+    onCreateFromDraw,
+    onGeometryDraft,
+    tool,
+    selectedId,
+    routePicking,
+    routeActive,
+    onRoutePick,
+    onBounds,
+  ]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -178,13 +230,37 @@ export function MapView({
       map = new MapLibreMap({
         container: el,
         style: makeStyle(),
-        center: [25.6953, 55.6363],
-        zoom: 17,
+        center: [0, 0],
+        zoom: 1,
       });
       mapRef.current = map;
       map.on('load', () => {
         if (!map) return;
         readyRef.current = true;
+        setReady(true);
+        const reportBounds = () => {
+          if (!map) return;
+          if (!didInitialFitRef.current) return;
+          const b = map.getBounds();
+          try {
+            callbacksRef.current.onBounds?.(
+              viewportBounds([
+                [b.getWest(), b.getSouth()],
+                [b.getWest(), b.getNorth()],
+                [b.getEast(), b.getSouth()],
+                [b.getEast(), b.getNorth()],
+              ]),
+            );
+          } catch {
+            /* A world view can exceed the local projection. Zoom to features first. */
+          }
+        };
+        map.on('moveend', reportBounds);
+        reportBounds();
+        map.on('click', (e) => {
+          if (callbacksRef.current.routePicking)
+            callbacksRef.current.onRoutePick?.([e.lngLat.lng, e.lngLat.lat]);
+        });
         try {
           const selectFlags = {
             feature: {
@@ -239,6 +315,7 @@ export function MapView({
 
         for (const layer of ['features-point', 'features-outline', 'features-fill']) {
           map.on('click', layer, (e: MapLayerMouseEvent) => {
+            if (callbacksRef.current.routeActive) return;
             if (callbacksRef.current.tool !== 'pan' && callbacksRef.current.tool !== 'select')
               return;
             const fid = e.features?.[0]?.properties?.id as string | undefined;
@@ -275,7 +352,7 @@ export function MapView({
         map.setLayoutProperty(`base-${id}`, 'visibility', id === basemap ? 'visible' : 'none');
       }
     }
-  }, [basemap]);
+  }, [basemap, ready]);
 
   // Switch Terra Draw mode and load the selected feature for vertex editing.
   useEffect(() => {
@@ -316,7 +393,7 @@ export function MapView({
     } catch {
       /* ignore mode errors in headless tests */
     }
-  }, [tool, selectedId, features]);
+  }, [tool, selectedId, features, ready]);
 
   // Update the GeoJSON source whenever features/rules/filters change.
   useEffect(() => {
@@ -353,7 +430,24 @@ export function MapView({
       didInitialFitRef.current = true;
       fitFeatures(map, visible);
     }
-  }, [features, rules, hiddenCategories, showDisabled, showDeleted, selectedId]);
+  }, [features, rules, hiddenCategories, showDisabled, showDeleted, selectedId, ready]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    void (map.getSource('alouna-costs') as GeoJSONSource | undefined)?.setData(
+      debugGeoJson(routeOverlay?.debug ?? null),
+    );
+  }, [ready, routeOverlay?.debug]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    void (map.getSource('alouna-route') as GeoJSONSource | undefined)?.setData(
+      routeGeoJson(routeOverlay),
+    );
+    map.getCanvas().style.cursor = routePicking ? 'crosshair' : '';
+  }, [ready, routeOverlay, routePicking]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -362,9 +456,16 @@ export function MapView({
       map,
       features.filter((f) => f.status !== 'deleted'),
     );
-  }, [fitTrigger, features]);
+  }, [fitTrigger, features, ready]);
 
-  return <div ref={containerRef} className="editor-map" role="region" aria-label="Property map" />;
+  return (
+    <div
+      ref={containerRef}
+      className="editor-map"
+      role="region"
+      aria-label={strings.editor.route.mapLabel}
+    />
+  );
 }
 
 function fitFeatures(map: MapLibreMap, items: readonly EffectiveFeature[]): void {

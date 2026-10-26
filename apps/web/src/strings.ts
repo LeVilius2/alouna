@@ -51,7 +51,92 @@ export const strings = {
       selected: 'Edit item',
       rules: 'Rules',
       import: 'Import / Export',
+      routes: 'Test route',
       account: 'Account & sync',
+    },
+    route: {
+      heading: 'Route tester',
+      hint: 'Choose A and B on the map or select point destinations, then calculate a route.',
+      source: 'Routing map',
+      approved: 'Approved map',
+      preview: 'Editor preview',
+      approvedHint:
+        'Uses the last approved routing snapshot. Pending edits do not affect this test.',
+      previewHint:
+        'Preview only: includes unsynced edits and submissions awaiting review. This is not the navigator map.',
+      unavailable: 'Routing data is unavailable or invalid. Load a valid map before testing.',
+      noArea: 'No enabled walkable area. Enable and approve a plot before testing.',
+      start: 'A · Start',
+      end: 'B · End',
+      pickStart: 'Pick A on map',
+      pickEnd: 'Pick B on map',
+      pickingStart: 'Click the map to place A. The next click will place B.',
+      pickingEnd: 'Click the map to place B.',
+      pointDestination: 'Choose a point destination',
+      pointHint: 'Area and line destinations need an explicit point on the map.',
+      coordinate: (p: readonly number[]) => `${p[0]!.toFixed(6)}, ${p[1]!.toFixed(6)}`,
+      unset: 'Not set',
+      calculate: 'Calculate route',
+      calculating: 'Calculating route…',
+      cancel: 'Cancel calculation',
+      clear: 'Clear test',
+      costs: 'Show cost grid',
+      costHint:
+        'Grid covers the current view when you calculate. Pan or zoom, then calculate again to refresh it.',
+      viewport: (width: number, height: number) =>
+        `Visible extent: ${width.toFixed(0)} × ${height.toFixed(0)} m`,
+      gridSummary: (count: number, size: number) =>
+        `Exact cost grid: ${count.toLocaleString('en-US')} cells at ${size} m.`,
+      costLegend:
+        'Red: blocked (including buffers). Green: preferred. Yellow: grass. Orange: higher cost. Clearance adds cost near obstacles.',
+      zoomIn: (n: number) =>
+        `This view contains ${n.toLocaleString('en-US')} cells. Zoom in and calculate again to show the exact grid.`,
+      summary: (distance: number, cost: number, visited: number) =>
+        `${distance.toFixed(1)} m · weighted cost ${cost.toFixed(1)} · ${visited.toLocaleString('en-US')} searched cells`,
+      failed: 'The routing worker could not calculate this route. Check the map and try again.',
+      failures: {
+        'blocked-start': 'A is blocked and has no passable cell within the 2 m snap limit.',
+        'blocked-end': 'B is blocked and has no passable cell within the 2 m snap limit.',
+        'no-route':
+          'No connected route exists between A and B under the current rules. Show the cost grid to inspect blocked cells and gaps in walkable areas.',
+        'search-limit':
+          'The search limit was reached. This does not prove that no route exists. Try closer endpoints or a smaller test area.',
+      },
+      why: 'Why no route?',
+      endpointBlocked: (endpoint: string, blockers: string) =>
+        `${endpoint}: blocked by ${blockers}. The red outline marks its grid cell.`,
+      outside: 'outside the enabled walkable areas',
+      snap: (endpoint: string, distance: number) =>
+        `${endpoint} snapped ${distance.toFixed(1)} m to a passable cell. The dotted segment is unchecked; simulation starts and ends on the calculated route.`,
+      events: 'Route events',
+      noEvents: 'No annotated events on this route.',
+      eventDistance: (m: number) => `At ${m.toFixed(1)} m`,
+      turn: (direction: 'left' | 'right', angle: number) =>
+        `Turn ${direction} ${angle.toFixed(0)}°`,
+      enter: (label: string) => `Enter ${label}`,
+      hazard: (label: string) => `Near ${label}`,
+      crossing: 'Road crossing. Stop and listen.',
+      simulator: 'Walk simulator',
+      simulationHint: 'Virtual walk only. Audio and guidance will be connected in M5.',
+      play: 'Play walk',
+      pause: 'Pause walk',
+      reset: 'Reset walker',
+      mode: 'Simulation mode',
+      automatic: 'Follow route',
+      manual: 'Manual movement',
+      speed: 'Walking speed (m/s)',
+      headingControl: 'Walker heading (degrees)',
+      forward: 'Step forward 1 m',
+      backward: 'Step back 1 m',
+      left: 'Turn left 15°',
+      right: 'Turn right 15°',
+      keyboardHint:
+        'Focus this pad. Up/down: move 1 m. Left/right: turn 15°. Manual movement may leave the route or cross blocked cells.',
+      keyboardPad: 'Manual walker controls',
+      progress: (walked: number, total: number) => `${walked.toFixed(1)} of ${total.toFixed(1)} m`,
+      headingValue: (n: number) => `Heading ${n.toFixed(0)}°`,
+      finished: 'Simulated walk finished.',
+      mapLabel: 'Property map',
     },
     draw: {
       label: 'Drawing tools',

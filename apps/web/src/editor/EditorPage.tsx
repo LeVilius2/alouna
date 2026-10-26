@@ -1,4 +1,12 @@
-import { lazy, Suspense, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { Link } from 'react-router';
 import type { CategoryRule, Geometry } from '@alouna/core';
 import { useData } from '../data/context';
@@ -9,6 +17,9 @@ import { FeaturePanel } from './FeaturePanel';
 import { ImportExportPanel } from './ImportExportPanel';
 import type { BasemapId, DrawTool } from './MapView';
 import { RulesPanel } from './RulesPanel';
+import { RouteTester } from './RouteTester';
+import { useRouteTester } from './useRouteTester';
+import type { RouteMapOverlay } from './routeState';
 import {
   computeEffectiveState,
   payloadFromFeature,
@@ -18,7 +29,7 @@ import {
 
 const MapView = lazy(() => import('./MapView').then((m) => ({ default: m.MapView })));
 
-type Tab = 'features' | 'selected' | 'rules' | 'import' | 'account';
+type Tab = 'features' | 'selected' | 'rules' | 'import' | 'routes' | 'account';
 
 const empty = emptyData(),
   subscribe = () => () => {},
@@ -52,6 +63,43 @@ export function EditorPage() {
   const [canRedo, setCanRedo] = useState(false);
 
   const effective = useMemo(() => computeEffectiveState(data), [data]);
+  const routeTest = useRouteTester(
+    data,
+    `${import.meta.env.VITE_SUPABASE_URL}:${store?.userId ?? ''}`,
+  );
+  const testMapFeatures = useMemo(
+    () =>
+      (routeTest.map?.features ?? []).map((feature) => ({
+        feature,
+        published: feature,
+        status: 'approved' as const,
+        created_by_name: '',
+        own: false,
+        queued: false,
+        queueError: null,
+        baseRevision: feature.properties.revision ?? 0,
+      })),
+    [routeTest.map],
+  );
+  const [walker, setWalker] = useState<{
+    routeId: string;
+    value: RouteMapOverlay['walker'];
+  } | null>(null);
+  const routeId = routeTest.result?.id ?? '';
+  const onWalker = useCallback(
+    (value: RouteMapOverlay['walker']) => setWalker({ routeId, value }),
+    [routeId],
+  );
+  const routeOverlay: RouteMapOverlay | null =
+    tab === 'routes'
+      ? {
+          start: routeTest.start,
+          end: routeTest.end,
+          response: routeTest.result,
+          debug: routeTest.showCosts ? (routeTest.result?.debug ?? null) : null,
+          walker: walker?.routeId === routeId ? walker.value : null,
+        }
+      : null;
   const isAdmin = data.profile?.role === 'admin';
   const selected = useMemo(
     () => effective.features.find((f) => f.feature.id === selectedId) ?? null,
@@ -233,7 +281,10 @@ export function EditorPage() {
                 type="button"
                 aria-pressed={tool === mode}
                 className={`tool-button${tool === mode ? ' tool-button--active' : ''}`}
-                onClick={() => setTool(mode)}
+                onClick={() => {
+                  setTool(mode);
+                  if (tab === 'routes') setTab('features');
+                }}
               >
                 {t.draw[mode]}
               </button>
@@ -299,35 +350,41 @@ export function EditorPage() {
             fallback={<div className="editor-map" role="region" aria-label="Property map" />}
           >
             <MapView
-              features={effective.features}
-              rules={effective.rules}
+              features={tab === 'routes' ? testMapFeatures : effective.features}
+              rules={tab === 'routes' ? (routeTest.map?.rules ?? []) : effective.rules}
               hiddenCategories={hiddenCategories}
               showDisabled={showDisabled}
               showDeleted={showDeleted}
-              selectedId={selectedId}
+              selectedId={tab === 'routes' ? null : selectedId}
               basemap={basemap}
-              tool={tool}
+              tool={tab === 'routes' ? 'pan' : tool}
               fitTrigger={fitTrigger}
               onSelect={selectFeature}
               onCreateFromDraw={(geom, rad) => void handleCreateFromDraw(geom, rad)}
               onGeometryDraft={setDraftGeometry}
+              routeOverlay={routeOverlay}
+              routePicking={tab === 'routes' && routeTest.picking !== null}
+              onRoutePick={routeTest.pick}
+              onBounds={routeTest.setBounds}
             />
           </Suspense>
 
           <aside className="editor-sidebar" aria-label="Editor panels">
             <nav className="tab-bar" role="tablist">
-              {(['features', 'selected', 'rules', 'import', 'account'] as const).map((id) => (
-                <button
-                  key={id}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === id}
-                  className={`tab-button${tab === id ? ' tab-button--active' : ''}`}
-                  onClick={() => setTab(id)}
-                >
-                  {t.tabs[id]}
-                </button>
-              ))}
+              {(['features', 'selected', 'rules', 'import', 'routes', 'account'] as const).map(
+                (id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === id}
+                    className={`tab-button${tab === id ? ' tab-button--active' : ''}`}
+                    onClick={() => setTab(id)}
+                  >
+                    {t.tabs[id]}
+                  </button>
+                ),
+              )}
             </nav>
 
             <div className="sidebar-body">
@@ -499,6 +556,14 @@ export function EditorPage() {
               )}
 
               {tab === 'account' && <DataPanel />}
+              {tab === 'routes' && (
+                <RouteTester
+                  test={routeTest}
+                  isAdmin={isAdmin}
+                  onPick={(endpoint) => routeTest.setPicking(endpoint)}
+                  onWalker={onWalker}
+                />
+              )}
             </div>
           </aside>
         </div>

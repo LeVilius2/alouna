@@ -13,7 +13,11 @@ export function createTileCache(scope: string, database = 'alouna-tiles-v1') {
       } catch {
         /* A cache miss is safe: core regenerates the tiles. */
       }
-      await del(scope, store);
+      try {
+        await del(scope, store);
+      } catch {
+        /* Storage can be unavailable; regenerate instead. */
+      }
       return false;
     },
     save: (grid: RoutingGrid) => set(scope, grid.exportTiles(), store),

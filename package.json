@@ -13,6 +13,7 @@
     "build": "pnpm -r build",
     "preview": "pnpm --filter @alouna/web preview",
     "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @alouna/web test:e2e",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write ."

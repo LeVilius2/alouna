@@ -411,3 +411,90 @@ a {
   font-size: 13px;
   color: #fbbf24;
 }
+
+.route-tester fieldset {
+  border: 1px solid #52525b;
+  border-radius: 10px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  min-width: 0;
+}
+
+.route-tester button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #71717a;
+  border-radius: 8px;
+  background: #27272a;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.route-tester button[aria-pressed='true'] {
+  background: #2563eb;
+}
+.route-tester button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.route-tester label:not(.check-row) {
+  display: grid;
+  gap: 6px;
+}
+.route-tester p {
+  margin-block: 4px;
+}
+
+.route-tester fieldset:first-of-type {
+  border-left: 5px solid #16a34a;
+}
+.route-tester fieldset:nth-of-type(2) {
+  border-left: 5px solid #9333ea;
+}
+.route-tester fieldset p {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.route-warning {
+  color: #fbbf24;
+  border-left: 3px solid #fbbf24;
+  padding-left: 10px;
+}
+.route-events {
+  padding-left: 22px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.route-events li {
+  margin-block: 8px;
+}
+.cost-legend {
+  padding: 10px;
+  background: #27272a;
+  border-radius: 8px;
+}
+.simulator {
+  border-top: 1px solid #52525b;
+  padding-top: 16px;
+}
+.simulator h3 {
+  margin: 0;
+}
+.manual-pad {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #71717a;
+  border-radius: 8px;
+}
+.manual-pad:focus-visible {
+  outline: 3px solid #facc15;
+}
+.editor-form input[type='range'] {
+  width: 100%;
+  min-height: 44px;
+}

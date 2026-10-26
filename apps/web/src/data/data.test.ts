@@ -1,6 +1,6 @@
 // @vitest-environment node
 import 'fake-indexeddb/auto';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_RULES, RoutingGrid, type MapFeature } from '@alouna/core';
 import { FeatureStore } from './featureStore';
 import { createDataStorage } from './storage';
@@ -211,5 +211,17 @@ describe('persistent offline data', () => {
       ),
     ).toBe(false);
     expect(await cache.restore(grid)).toBe(false);
+  });
+  it('can route without a tile cache when browser storage is unavailable', async () => {
+    const open = vi.spyOn(indexedDB, 'open').mockImplementation(() => {
+      throw new Error('Storage unavailable');
+    });
+    try {
+      const cache = createTileCache('alice', crypto.randomUUID());
+      const grid = {} as RoutingGrid; // No cache was read, so the grid must never be accessed.
+      expect(await cache.restore(grid)).toBe(false);
+    } finally {
+      open.mockRestore();
+    }
   });
 });

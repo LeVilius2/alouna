@@ -48,6 +48,7 @@ default to `pmOnFail=ignore` and hide errors that CI catches.
 pnpm install
 pnpm dev         # web app on http://localhost:5173 (also on LAN for phone testing; GPS/compass need HTTPS on a phone)
 pnpm test        # vitest in all packages
+pnpm test:e2e    # Playwright editor smoke tests on port 5174; synthetic offline account
 pnpm typecheck   # tsc --noEmit in all packages
 pnpm lint        # eslint + prettier --check
 pnpm format      # prettier --write
@@ -62,7 +63,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, test and build on every pu
 - [x] M1 – Core: geo, rules, routing (+ tests)
 - [x] M2 – Supabase schema, RLS, seed, offline data layer
 - [x] M3 – Editor: map, drawing, rules panel, import/export
-- [ ] M4 – Editor: route tester, cost overlay, walk simulator
+- [x] M4 – Editor: route tester, cost overlay, walk simulator
 - [ ] M5 – Navigator (web): heading, location, guidance, sonar, speech, hazards
 - [ ] M6 – Live location (Realtime)
 - [ ] M7 – Field capture: Add here, record walk, offset capture
@@ -178,3 +179,26 @@ _(agents: append milestone notes here)_
   - `ImportExportPanel`: file/paste import with CRS + join selector and live preview;
     full GeoJSON backup export of features and rules.
   - Undo/redo of unsynced queue changes via `FeatureStore.replaceQueue`.
+
+### M4 (done)
+
+- Route tester: click A/B or select point destinations, calculate in a Web Worker,
+  and inspect the route, metric distance, weighted cost, events, endpoint blockers
+  and bounded-snap notices. Cancel and stale-result invalidation terminate obsolete work.
+- Approved routing snapshot is the default. Admins can explicitly test an editor
+  preview with unsynced/unapproved edits; its map and rules match the test source.
+  Draft previews never publish changes or alter navigation data.
+- Exact visible cost cells include buffers, overrides and clearance penalties.
+  Views above 12,000 cells ask for a closer zoom. Account/backend-scoped M2 tiles
+  are restored/saved in the worker; unavailable IndexedDB is a safe cache miss.
+- Pure metric playback, play/pause/reset/speed, manual arrow-key/button movement,
+  heading control and a map walker arrow. Simulated location/heading interfaces
+  are ready for M5. Audio and real guidance remain M5, as planned.
+- MapLibre upgraded to the latest policy-eligible stable release (6.16.0). Added
+  its required Vite worker URL and fixed map effects missing the initial load;
+  both workers are included in the PWA precache. Playwright and Node types are
+  test-only additions for the planned browser smoke tests and strict checks.
+- See `docs/EDITOR.md` for use and validation. Chromium smoke tests cover actual
+  map clicks, the worker, crossing route, exact overlay, cache persistence,
+  simulation and blocked endpoints. CI runs them after build. Production deployment
+  and real iPhone field testing have not been performed as part of M4.
