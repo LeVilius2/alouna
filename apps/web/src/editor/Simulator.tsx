@@ -1,41 +1,120 @@
-import { useEffect, useMemo, useState } from 'react';
-import { moveWalker, normalizeDegrees, sampleWalk, type LonLat } from '@alouna/core';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DEFAULT_RULES,
+  GuidanceEngine,
+  moveWalker,
+  normalizeDegrees,
+  sampleWalk,
+  type CategoryRule,
+  type LonLat,
+  type MapFeature,
+  type RouteEvent,
+  type SnapNotice,
+} from '@alouna/core';
+import { formatSpeechCue } from '../audio/cues';
+import { WebAudioSonar } from '../audio/sonar';
+import { BrowserSpeech } from '../audio/speech';
 import { strings } from '../strings';
 import { SimulatedSensors } from '../sensors/simulated';
 import type { RouteMapOverlay } from './routeState';
 
 export function Simulator({
   waypoints,
+  events = [],
+  snaps = [],
+  features = [],
+  rules = DEFAULT_RULES,
+  destinationName = 'Destination',
   onWalker,
 }: {
   waypoints: readonly LonLat[];
+  events?: readonly RouteEvent[];
+  snaps?: readonly SnapNotice[];
+  features?: readonly MapFeature[];
+  rules?: readonly CategoryRule[];
+  destinationName?: string;
   onWalker: (walker: RouteMapOverlay['walker']) => void;
 }) {
   const t = strings.editor.route;
   const [mode, setMode] = useState<'automatic' | 'manual'>('automatic');
   const [distance, setDistance] = useState(0),
     [speed, setSpeed] = useState(1.2),
-    [playing, setPlaying] = useState(false);
+    [playing, setPlaying] = useState(false),
+    [audioEnabled, setAudioEnabled] = useState(false);
   const sample = useMemo(() => sampleWalk(waypoints, distance), [waypoints, distance]);
   const [manual, setManual] = useState(() => ({
     position: sample.position,
     headingDegrees: sample.headingDegrees,
   }));
   const sensors = useMemo(() => new SimulatedSensors(), []);
+  const sonarRef = useRef<WebAudioSonar | null>(null);
+  const speechRef = useRef<BrowserSpeech | null>(null);
+  const guidanceRef = useRef<GuidanceEngine | null>(null);
+
   const walker = mode === 'automatic' ? sample : manual;
   const finished = sample.distanceM >= sample.totalM;
 
   useEffect(() => {
-    const unLocation = sensors.location.subscribe((fix) =>
-      onWalker({ position: fix.position, headingDegrees: walker.headingDegrees }),
+    const sonar = new WebAudioSonar({ volume: 0.65 });
+    const speech = new BrowserSpeech();
+    sonarRef.current = sonar;
+    speechRef.current = speech;
+    return () => {
+      sonar.stop();
+      speech.stop();
+      sonarRef.current = null;
+      speechRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    guidanceRef.current = new GuidanceEngine(
+      {
+        destinationId: 'sim-target',
+        destinationName,
+        waypoints,
+        distanceM: sample.totalM,
+        events,
+        snaps,
+        dataVersion: 'sim',
+      },
+      features,
+      rules,
     );
+  }, [waypoints, events, snaps, features, rules, destinationName, sample.totalM]);
+
+  useEffect(() => {
+    if (!audioEnabled) {
+      sonarRef.current?.stop();
+      speechRef.current?.stop();
+    }
+  }, [audioEnabled]);
+
+  useEffect(() => {
+    const unLocation = sensors.location.subscribe((fix) => {
+      onWalker({ position: fix.position, headingDegrees: walker.headingDegrees });
+      if (audioEnabled && guidanceRef.current) {
+        const stepResult = guidanceRef.current.step({
+          position: fix.position,
+          accuracyM: fix.accuracyM,
+          timestampMs: fix.timestamp,
+          speedMps: fix.speedMps,
+          headingDegrees: walker.headingDegrees,
+        });
+        sonarRef.current?.update(stepResult.sonar);
+        for (const cue of stepResult.cues) {
+          if (cue.kind === 'arrived') sonarRef.current?.playArrivalChime();
+          speechRef.current?.speak(formatSpeechCue(cue), { interrupt: cue.kind !== 'start' });
+        }
+      }
+    });
     const timestamp = Date.now();
     sensors.emit(
-      { position: walker.position, accuracyM: 0, timestamp, speedMps: playing ? speed : 0 },
+      { position: walker.position, accuracyM: 1.5, timestamp, speedMps: playing ? speed : 0 },
       { degrees: walker.headingDegrees, timestamp },
     );
     return unLocation;
-  }, [walker.position, walker.headingDegrees, onWalker, playing, speed, sensors]);
+  }, [walker.position, walker.headingDegrees, onWalker, playing, speed, sensors, audioEnabled]);
   useEffect(() => () => onWalker(null), [onWalker]);
 
   useEffect(() => {
@@ -65,6 +144,20 @@ export function Simulator({
     <section className="editor-form simulator" aria-label={t.simulator}>
       <h3>{t.simulator}</h3>
       <p className="muted">{t.simulationHint}</p>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={audioEnabled}
+          onChange={(e) => {
+            const checked = e.target.checked;
+            if (checked) {
+              void sonarRef.current?.unlockFromTap();
+            }
+            setAudioEnabled(checked);
+          }}
+        />
+        {t.audioEnabled}
+      </label>
       <label>
         {t.mode}
         <select

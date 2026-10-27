@@ -117,7 +117,8 @@ export const strings = {
       hazard: (label: string) => `Near ${label}`,
       crossing: 'Road crossing. Stop and listen.',
       simulator: 'Walk simulator',
-      simulationHint: 'Virtual walk only. Audio and guidance will be connected in M5.',
+      simulationHint: 'Virtual walk with live guidance and sonar audio.',
+      audioEnabled: 'Play sonar & speech in simulator',
       play: 'Play walk',
       pause: 'Pause walk',
       reset: 'Reset walker',
@@ -246,6 +247,124 @@ export const strings = {
     title: 'Navigator',
     placeholder: 'Audio navigation will be built in milestone M5.',
     back: 'Back',
+    whereTo: 'Where to?',
+    repeatLast: (name: string) => `Repeat last: ${name}`,
+    startTo: (name: string) => `Start walking to ${name}`,
+    distanceAway: (meters: number) => `${Math.round(meters)} m away`,
+    distanceUnknown: 'Distance waiting for GPS',
+    noDestinations:
+      'No destinations are available on the approved map yet. Add a point destination in the map editor.',
+    noWalkableArea: 'No enabled walkable area on the approved map. Guidance is unavailable.',
+    signInRequired:
+      'Sign in once while online to download the approved map for offline navigation.',
+    settingsButton: 'Audio & compass settings',
+    closeSettings: 'Back to destinations',
+    simToggle: 'Use simulated walker (indoor test mode)',
+    simControlsLabel: 'Simulated walker controls',
+    simPlay: 'Auto-walk route',
+    simPause: 'Pause auto-walk',
+    simStepForward: 'Step forward 2 m',
+    simTurnLeft: 'Turn left 20°',
+    simTurnRight: 'Turn right 20°',
+    simStepOffRoute: 'Step 6 m off route',
+    simWeakGps: 'Simulate weak GPS (±25 m)',
+    simGoodGps: 'Restore good GPS (±2 m)',
+    navigatingTo: (name: string) => `Navigating to ${name}`,
+    stopButton: 'Stop navigation',
+    stopHint: 'Stops audio sonar and returns to destination list',
+    whereAmIButton: 'Where am I?',
+    whereAmIHint: 'Spoken nearest landmark, remaining distance, and GPS quality',
+    repeatButton: 'Repeat instruction',
+    repeatHint: 'Repeats the last spoken navigation prompt',
+    statusCalculating: 'Calculating route…',
+    statusGuiding: (remainingM: number, turnDegrees: number) => {
+      const rounded = Math.round(remainingM);
+      if (Math.abs(turnDegrees) <= 10) return `${rounded} m remaining · On course`;
+      const dir = turnDegrees > 0 ? 'right' : 'left';
+      return `${rounded} m remaining · Turn ${dir} ${Math.round(Math.abs(turnDegrees))}°`;
+    },
+    statusWeakGps: 'GPS weak, stop and wait.',
+    statusRecalculating: 'Recalculating route…',
+    statusArrived: (name: string) => `Arrived at ${name}.`,
+    statusRouteFailed: (reason: string) => `Cannot guide: ${reason}`,
+    gpsBadge: (accuracyM: number | null) =>
+      accuracyM !== null ? `GPS ±${Math.round(accuracyM)} m` : 'Waiting for GPS fix…',
+    headingBadge: (degrees: number | null) =>
+      degrees !== null ? `Heading ${Math.round(degrees)}°` : 'Waiting for compass…',
+    batteryBadge: (percent: number) => `Battery ${percent}%`,
+    settings: {
+      heading: 'Settings & safety tips',
+      voiceLocale: 'Speech voice',
+      localeEnUs: 'English (US)',
+      localeEnGb: 'English (UK)',
+      speechRate: 'Speech rate',
+      sonarVolume: 'Sonar volume',
+      declination: 'Magnetic declination (°)',
+      iosHaptics: 'iOS 18 switch haptic ticks (experimental)',
+      testSonar: 'Test sonar ping',
+      testSpeech: 'Test voice',
+      safetyTipsHeading: 'iPhone & safety checklist',
+      safetyTipHeadphones:
+        'Use bone-conduction headphones (such as Shokz) so you still hear cars, water, and people.',
+      safetyTipHoldFlat:
+        'Hold the phone flat in your hand with the top edge pointing straight ahead.',
+      safetyTipScreenOn:
+        'Keep the screen unlocked and Alouna in the foreground. locking the screen stops GPS and audio.',
+      safetyTipBattery:
+        'Screen + GPS + audio uses battery quickly. Lower screen brightness before a walk.',
+    },
+    spoken: {
+      start: (name: string, distanceM: number, snapM: number | null) =>
+        snapM && snapM >= 0.5
+          ? `To ${name}, ${Math.round(distanceM)} meters. Note: route starts ${Math.round(snapM)} meters from your current GPS position. Proceed carefully.`
+          : `To ${name}, ${Math.round(distanceM)} meters.`,
+      batteryNotice: (percent: number) => `Battery ${percent} percent.`,
+      weakGps: 'GPS weak, stop and wait.',
+      gpsRestored: 'GPS signal restored. Continue.',
+      recalculating: 'Recalculating.',
+      pausedBackground: 'Navigation paused. Recalculating.',
+      stopped: 'Navigation stopped.',
+      arrived: (name: string) => `Arrived at ${name}.`,
+      turn: (direction: 'left' | 'right', angleDegrees: number) =>
+        angleDegrees >= 135 ? 'Turn around.' : `Turn ${direction}.`,
+      crossing: 'Road crossing. Stop and listen.',
+      steps: 'Steps ahead.',
+      caution: 'Caution area ahead.',
+      enter: (label: string) => `${label} ahead.`,
+      hazard: (label: string, distanceM: number, sector: 'ahead' | 'left' | 'right' | 'behind') => {
+        const dist = Math.max(1, Math.round(distanceM));
+        const unit = dist === 1 ? 'meter' : 'meters';
+        return `${label}, ${dist} ${unit}, ${sector}.`;
+      },
+      whereAmI: (landmarkText: string, remainingM: number | null, accuracyM: number | null) => {
+        const parts = [landmarkText];
+        if (remainingM !== null) {
+          parts.push(`${Math.round(remainingM)} meters remaining.`);
+        }
+        if (accuracyM !== null) {
+          parts.push(`GPS accuracy plus or minus ${Math.round(accuracyM)} meters.`);
+        } else {
+          parts.push('No GPS fix yet.');
+        }
+        return parts.join(' ');
+      },
+      nearestLandmark: (
+        name: string,
+        distanceM: number,
+        sector: 'ahead' | 'left' | 'right' | 'behind',
+      ) => {
+        const dist = Math.round(distanceM);
+        if (dist <= 1) return `At ${name}.`;
+        return `Near ${name}, ${dist} meters ${sector}.`;
+      },
+      noLandmark: 'No named landmark nearby.',
+      noInstructionYet: 'Waiting for route guidance.',
+      routeBlockedStart:
+        'Your current position is in a blocked area or outside the walkable property. Stop and ask for assistance.',
+      routeBlockedEnd: 'That destination is currently blocked. Guidance stopped.',
+      routeNotFound: 'No safe route found to that destination. Guidance stopped.',
+      voiceTestSample: 'Alouna audio navigation ready.',
+    },
   },
   notFound: 'Page not found.',
 } as const;

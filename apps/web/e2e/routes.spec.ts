@@ -146,6 +146,29 @@ test('map clicks, the real worker, exact cost grid and virtual walking work offl
   expect(errors).toEqual([]);
 });
 
+test('navigator works offline with real routing worker, simulated walker, weak GPS gate, and Where am I', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/navigate');
+  await expect(page.getByRole('heading', { name: 'Where to?' })).toBeVisible();
+  await page.getByLabel('Use simulated walker (indoor test mode)').check();
+  await page.getByRole('button', { name: 'Start walking to Sauna' }).click();
+  await expect(page.getByRole('heading', { name: 'Navigating to Sauna' })).toBeVisible();
+  await expect(page.getByText(/m remaining/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Simulate weak GPS (±25 m)' }).click();
+  await expect(page.getByText('GPS weak, stop and wait.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Restore good GPS (±2 m)' }).click();
+  await expect(page.getByText(/m remaining/)).toBeVisible();
+
+  await page.getByRole('button', { name: /Stop navigation/ }).click();
+  await expect(page.getByRole('button', { name: 'Repeat last: Sauna' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
 test('a blocked endpoint fails visibly and clear removes its result', async ({ page }) => {
   await page.goto('/editor');
   await page.getByRole('tab', { name: 'Test route' }).click();

@@ -17,3 +17,8 @@ export * from './import/types';
 export * from './import/geojson';
 export * from './import/csv';
 export * from './import/crs';
+export * from './guidance/carrot';
+export * from './guidance/offRoute';
+export * from './guidance/hazards';
+export * from './guidance/guidanceEngine';
+export * from './guidance/heading';

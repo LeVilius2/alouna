@@ -5,6 +5,7 @@ export interface LocationFix {
   accuracyM: number;
   timestamp: number;
   speedMps: number;
+  courseDegrees?: number | null;
 }
 export interface HeadingFix {
   degrees: number;
@@ -15,4 +16,8 @@ export interface LocationProvider {
 }
 export interface HeadingProvider {
   subscribe(listener: (fix: HeadingFix) => void): () => void;
+  requestPermission?: () => Promise<boolean>;
+}
+export interface Haptics {
+  pulse(kind: 'aligned' | 'hazard' | 'arrived'): void;
 }

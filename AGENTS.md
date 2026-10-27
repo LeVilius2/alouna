@@ -64,7 +64,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, test and build on every pu
 - [x] M2 – Supabase schema, RLS, seed, offline data layer
 - [x] M3 – Editor: map, drawing, rules panel, import/export
 - [x] M4 – Editor: route tester, cost overlay, walk simulator
-- [ ] M5 – Navigator (web): heading, location, guidance, sonar, speech, hazards
+- [x] M5 – Navigator (web): heading, location, guidance, sonar, speech, hazards
 - [ ] M6 – Live location (Realtime)
 - [ ] M7 – Field capture: Add here, record walk, offset capture
 - [ ] M8 – PWA polish, accessibility audit, field testing
@@ -214,3 +214,49 @@ _(agents: append milestone notes here)_
 - Coolify currently deploys `main` through an existing webhook (observed during
   this release); the M1 manual-deployment note is historical. No deployment or
   security settings were changed. See `docs/DEPLOYMENT.md` for the release record.
+
+### M5 (done)
+
+- Pure `@alouna/core` guidance engine (`packages/core/src/guidance/`):
+  - `carrot.ts`: LKS94 polyline projection and 5 m pure-pursuit carrot target,
+    bearing, turn angle, remaining distance, and `computeSonarCommand` (mapping
+    distance 0.5–15 m to 300–1500 ms ping intervals, stereo pan `sin(turnAngle)`,
+    `aligned` ±10° / `off-course` / `behind` >135°).
+  - `offRoute.ts`: sustained off-route check requiring cross-track error above
+    `max(4 m, accuracy)` for at least 3 s before triggering recalculation.
+  - `hazards.ts`: live proximity detection for features within `warn_m` with
+    relative sector (`ahead`, `left`, `right`, `behind`), suppressing overridden
+    blockers (e.g. `road` while inside a `crossing`, `water` on a `dock`,
+    `fence`/`wall`/`building` at a `gate`/`door`), plus `findNearestLandmark` for
+    "Where am I?".
+  - `heading.ts`: circular `sin`/`cos` low-pass smoothing, screen orientation and
+    magnetic declination compensation (+8° default in Lithuania), and GPS
+    course-over-ground blending when walking ≥ 0.7 m/s with good accuracy.
+  - `guidanceEngine.ts`: stateful step evaluation with safety gates (`accuracy > 15 m`
+    or fix older than 5 s pauses sonar and announces `"GPS weak, stop and wait."`),
+    start snap notice, upcoming turn/crossing/entrance prompts, hazard repeat
+    cooldowns, off-route recalculation, and arrival detection (`max(2 m, min(6 m, accuracy))`).
+- Web sensors and audio (`apps/web/src/sensors/`, `apps/web/src/audio/`):
+  - `BrowserLocationProvider` (`navigator.geolocation.watchPosition`) and
+    `BrowserHeadingProvider` (iOS `webkitCompassHeading` + `requestPermission()` on
+    user tap; Android `deviceorientationabsolute`, ignoring uncalibrated relative
+    `deviceorientation`).
+  - `createWakeLockManager` (`navigator.wakeLock` + `visibilitychange` re-acquire
+    and background-return pause/recalculate prompt), `BrowserHaptics`
+    (`navigator.vibrate` on Android + optional iOS 18 `<input type="checkbox" switch>`
+    haptic tick), and `readBatteryPercent`.
+  - `WebAudioSonar`: Web Audio oscillators + `StereoPannerNode` left/right pan,
+    bright aligned ping + tick-tick confirmation, dull off-course ping, low
+    turn-around whoop, sawtooth hazard buzz, ascending arrival chime, and silent
+    looping `<audio>` element started from user tap to bypass the iOS silent switch.
+  - `BrowserSpeech` (`SpeechSynthesis`, selectable `en-US`/`en-GB`, speech rate)
+    and `cues.ts` formatting all prompts from `apps/web/src/strings.ts`.
+- Navigator UI (`apps/web/src/navigator/NavigatorPage.tsx`, `NavigatorSettings.tsx`)
+  and Editor Simulator audio toggle (`apps/web/src/editor/Simulator.tsx`):
+  - Large high-contrast VoiceOver-friendly destination list sorted by distance,
+    "Repeat last" shortcut, full-width Stop button, "Where am I?" button,
+    "Repeat instruction" button (plus double-tap / horizontal swipe), indoor
+    simulated walker controls, and persistent audio/compass settings.
+- Unit tests (`packages/core/src/guidance/guidance.test.ts`,
+  `apps/web/src/navigator/navigator.test.tsx`) and Playwright offline e2e test in
+  `apps/web/e2e/routes.spec.ts` all pass.

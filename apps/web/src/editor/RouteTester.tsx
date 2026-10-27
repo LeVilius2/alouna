@@ -172,7 +172,15 @@ export function RouteTester({
           ) : (
             <p>{t.noEvents}</p>
           )}
-          <Simulator key={test.result!.id} waypoints={route.waypoints} onWalker={onWalker} />
+          <Simulator
+            key={test.result!.id}
+            waypoints={route.waypoints}
+            events={route.events}
+            snaps={route.snaps}
+            features={test.map?.features ?? []}
+            rules={test.map?.rules ?? []}
+            onWalker={onWalker}
+          />
         </>
       )}
     </div>
