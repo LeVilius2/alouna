@@ -52,6 +52,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/0002_editor.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/0003_editor_owner_flag.sql
           psql -v ON_ERROR_STOP=1 -f supabase/migrations/0004_live_location.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/migrations/0005_scoped_map_revision.sql
           psql -v ON_ERROR_STOP=1 -f supabase/seed/seed.sql
           psql -v ON_ERROR_STOP=1 -f supabase/seed/seed.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/rls.sql

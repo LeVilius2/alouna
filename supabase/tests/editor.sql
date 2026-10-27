@@ -45,8 +45,10 @@ select pg_temp.assert_true((select x->'own'='false'::jsonb
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a2',true);
 
 -- Walker A submits: visible to A (pending-new, own) and admin, invisible to walker B.
+select (public.routing_snapshot('00000000-0000-0000-0000-0000000000a2')->>'version')::bigint as before_approval \gset
 select public.mutate_feature('00000000-0000-0000-0000-0000000000a2',gen_random_uuid(),'30000000-0000-0000-0000-000000000001',0,'upsert',
  '{"name":"Bench","category":"obstacle","geometry":{"type":"Point","coordinates":[25.695,55.636]}}');
+select pg_temp.assert_true((public.routing_snapshot('00000000-0000-0000-0000-0000000000a2')->>'version')::bigint = :before_approval,'Unapproved feature advanced map revision');
 select pg_temp.assert_true((select x->>'status'='pending-new' and (x->>'own')::boolean
   from pg_temp.item('00000000-0000-0000-0000-0000000000a2','30000000-0000-0000-0000-000000000001') x),'Walker cannot see own draft');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a3',true);
@@ -58,9 +60,11 @@ select pg_temp.assert_true((select x->>'status'='pending-new' and x->>'created_b
 -- Admin approves; walker A then proposes an edit. B sees only the approved state.
 select public.mutate_feature('00000000-0000-0000-0000-0000000000a1',gen_random_uuid(),'30000000-0000-0000-0000-000000000001',1,'upsert',
  '{"name":"Bench","category":"obstacle","geometry":{"type":"Point","coordinates":[25.695,55.636]}}');
+select pg_temp.assert_true((public.routing_snapshot('00000000-0000-0000-0000-0000000000a1')->>'version')::bigint = :before_approval + 1,'Approval did not advance the singleton revision once');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a2',true);
 select public.mutate_feature('00000000-0000-0000-0000-0000000000a2',gen_random_uuid(),'30000000-0000-0000-0000-000000000001',2,'upsert',
  '{"name":"Moved bench","category":"obstacle","geometry":{"type":"Point","coordinates":[25.696,55.636]}}');
+select pg_temp.assert_true((public.routing_snapshot('00000000-0000-0000-0000-0000000000a2')->>'version')::bigint = :before_approval + 1,'Pending edit advanced map revision');
 select pg_temp.assert_true((select x->>'status'='pending-edit' and x->'feature'->'properties'->>'name'='Moved bench'
   and x->'published'->'properties'->>'name'='Bench'
   from pg_temp.item('00000000-0000-0000-0000-0000000000a2','30000000-0000-0000-0000-000000000001') x),'Owner pending edit wrong');
@@ -71,6 +75,7 @@ select pg_temp.assert_true((select x->>'status'='approved' and x->'feature'->'pr
 -- Admin deletion: admin sees it as deleted (restorable); walkers no longer see it.
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a1',true);
 select public.mutate_feature('00000000-0000-0000-0000-0000000000a1',gen_random_uuid(),'30000000-0000-0000-0000-000000000001',3,'delete','{}');
+select pg_temp.assert_true((public.routing_snapshot('00000000-0000-0000-0000-0000000000a1')->>'version')::bigint = :before_approval + 2,'Deletion did not advance the singleton revision once');
 select pg_temp.assert_true((select x->>'status'='deleted'
   from pg_temp.item('00000000-0000-0000-0000-0000000000a1','30000000-0000-0000-0000-000000000001') x),'Admin cannot see deleted');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a2',true);
@@ -79,6 +84,7 @@ select pg_temp.assert_true(pg_temp.item('00000000-0000-0000-0000-0000000000a2','
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-0000000000a1',true);
 select public.mutate_feature('00000000-0000-0000-0000-0000000000a1',gen_random_uuid(),'30000000-0000-0000-0000-000000000001',4,'upsert',
  '{"name":"Bench","category":"obstacle","geometry":{"type":"Point","coordinates":[25.695,55.636]}}');
+select pg_temp.assert_true((public.routing_snapshot('00000000-0000-0000-0000-0000000000a1')->>'version')::bigint = :before_approval + 3,'Restore did not advance the singleton revision once');
 select pg_temp.assert_true((select x->>'status'='approved'
   from pg_temp.item('00000000-0000-0000-0000-0000000000a1','30000000-0000-0000-0000-000000000001') x),'Restore failed');
 rollback;
