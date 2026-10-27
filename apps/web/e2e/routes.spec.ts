@@ -170,6 +170,24 @@ test('navigator works offline with real routing worker, simulated walker, weak G
 
   await page.getByRole('button', { name: /Stop navigation/ }).click();
   await expect(page.getByRole('button', { name: 'Repeat last: Sauna' })).toBeVisible();
+
+  // M7 Field capture: Add here (averaged GPS point + compass offset) and Record walk offline
+  await page.getByRole('button', { name: 'Add here / Record walk' }).click();
+  await expect(page.getByRole('heading', { name: 'Field capture (Add here)' })).toBeVisible();
+  await page.getByLabel('Object is in front of me (compass + distance offset)').check();
+  await page.getByRole('button', { name: 'Start averaging GPS' }).click();
+  await page.getByRole('button', { name: 'Emit GPS fix here (±2 m)' }).click();
+  await page.getByRole('button', { name: 'Finish averaging now' }).click();
+  await expect(page.getByText(/Captured point: GPS ±/)).toBeVisible();
+  await page.getByLabel('Name (use keyboard microphone to dictate)').fill('Field apple tree');
+  await page.getByRole('button', { name: 'Save to map (works offline)' }).click();
+  await expect(page.getByText(/Saved "Field apple tree" to map/)).toBeVisible();
+
+  // Verify the field-captured feature appears in the Map editor offline queue (via SPA navigation)
+  await page.getByRole('button', { name: 'Back to navigator' }).click();
+  await page.getByRole('link', { name: 'Back' }).click();
+  await page.getByRole('link', { name: /Map editor/ }).click();
+  await expect(page.getByRole('button', { name: /Field apple tree/ })).toBeVisible();
   expect(errors).toEqual([]);
 });
 

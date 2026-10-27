@@ -66,7 +66,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, test and build on every pu
 - [x] M4 – Editor: route tester, cost overlay, walk simulator
 - [x] M5 – Navigator (web): heading, location, guidance, sonar, speech, hazards
 - [x] M6 – Live location (Realtime)
-- [ ] M7 – Field capture: Add here, record walk, offset capture
+- [x] M7 – Field capture: Add here, record walk, offset capture
 - [ ] M8 – PWA polish, accessibility audit, field testing
 - [ ] M9 – (optional) External GNSS receiver support (hardware; minimal code)
 
@@ -290,3 +290,34 @@ _(agents: append milestone notes here)_
 - See `docs/LIVE_LOCATION.md` for lifecycle, authorization-cache limits, migration
   prerequisites and verification. Latest policy-eligible dependencies checked;
   no updates were available. Optional permanent tracks remain deferred.
+
+### M7 (done)
+
+- Pure `@alouna/core` field capture module (`packages/core/src/capture/fieldCapture.ts`,
+  `fieldCapture.test.ts`):
+  - `averageGpsFixes(samples, { maxAccuracyM = 10 })`: averages GPS fixes in LKS94
+    (`EPSG:3346`) metres weighted by inverse variance (`1 / max(0.5, accuracyM)^2`),
+    discarding fixes with `accuracyM > 10 m` or non-finite, and returning WGS84
+    `position`, combined `accuracyM` (standard error + RMS scatter, min `0.5 m`),
+    `acceptedCount`, `discardedCount`, and `spreadM`.
+  - `computeOffsetPosition(origin, headingDegrees, distanceM)`: projects a point
+    `distanceM` ahead along `headingDegrees` in LKS94 metres for obstacles/edges the
+    user cannot stand on (e.g. water edge, ditch, fallen tree).
+  - `simplifyMetricPoints(points, toleranceM = 0.5)` and
+    `buildWalkTrackGeometry(samples, shape, { toleranceM = 0.5, maxAccuracyM = 15, minStepM = 0.5 })`:
+    Ramer-Douglas-Peucker simplification in LKS94 metres (zero external dependencies)
+    producing validated `LineString` or closed `Polygon` geometries (with
+    self-intersection and minimum `1 m²` area checks).
+- Web UI (`apps/web/src/navigator/FieldCapturePanel.tsx`):
+  - Available in both the Navigator (`/navigate` via the large `"Add here / Record walk"`
+    button on the home screen, toggleable in `NavigatorSettings` via
+    `showFieldCapture`) and the Map Editor (`/editor` via the `"Field capture"` tab).
+  - Supports 10–20 s GPS point averaging (with early finish), compass + distance offset
+    capture, and walked line/polygon recording, with VoiceOver live status updates and
+    spoken TTS announcements (`apps/web/src/strings.ts`).
+  - Saves offline-first into IndexedDB via `FeatureStore.enqueue` (`source: 'gps'`,
+    `gps_accuracy_m`, `enabled: true`, `reviewed: isAdmin` so walker additions are
+    flagged _Needs review_ in the editor).
+- Unit tests (`packages/core/src/capture/fieldCapture.test.ts`,
+  `apps/web/src/navigator/fieldCapture.test.tsx`) and Playwright offline e2e test in
+  `apps/web/e2e/routes.spec.ts` all pass.

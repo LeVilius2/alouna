@@ -98,6 +98,7 @@ export const strings = {
     tabs: {
       features: 'Features',
       selected: 'Edit item',
+      capture: 'Field capture',
       rules: 'Rules',
       import: 'Import / Export',
       routes: 'Test route',
@@ -351,6 +352,7 @@ export const strings = {
       sonarVolume: 'Sonar volume',
       declination: 'Magnetic declination (°)',
       iosHaptics: 'iOS 18 switch haptic ticks (experimental)',
+      showFieldCapture: "Show 'Add here' field capture on home screen",
       testSonar: 'Test sonar ping',
       testSpeech: 'Test voice',
       safetyTipsHeading: 'iPhone & safety checklist',
@@ -414,6 +416,71 @@ export const strings = {
       routeBlockedEnd: 'That destination is currently blocked. Guidance stopped.',
       routeNotFound: 'No safe route found to that destination. Guidance stopped.',
       voiceTestSample: 'Alouna audio navigation ready.',
+    },
+    addHereButton: 'Add here / Record walk',
+    addHereHint: 'Capture a GPS point, offset obstacle, or walked line or area offline',
+  },
+  capture: {
+    heading: 'Field capture (Add here)',
+    hint: 'Saves offline first on this device and syncs when online. Adjust on the aerial map later if needed.',
+    modeLabel: 'Capture method',
+    modePoint: 'Average GPS point (Add here)',
+    modeWalk: 'Record walk (line or area)',
+    durationLabel: 'Averaging duration',
+    durationOption: (seconds: number) => `${seconds} seconds`,
+    useOffset: 'Object is in front of me (compass + distance offset)',
+    offsetDistanceLabel: 'Offset distance ahead (m)',
+    offsetSummary: (distanceM: number, headingDeg: number) =>
+      `Places point ${distanceM.toFixed(1)} m ahead at heading ${Math.round(headingDeg)}°`,
+    startPoint: 'Start averaging GPS',
+    stopEarly: 'Finish averaging now',
+    resetCapture: 'Capture again',
+    averagingStatus: (secondsLeft: number, accepted: number, discarded: number) =>
+      `Averaging GPS… ${secondsLeft} s left · ${accepted} good fixes (≤10 m)${discarded > 0 ? ` · ${discarded} weak (>10 m) discarded` : ''}`,
+    pointCaptured: (accuracyM: number, accepted: number, offsetM: number | null) =>
+      `Captured point: GPS ±${accuracyM.toFixed(1)} m (${accepted} fixes)${offsetM ? ` + ${offsetM.toFixed(1)} m compass offset` : ''}.`,
+    noValidPointFixes:
+      'No GPS fixes with accuracy 10 m or better were received. Move to open sky and try again.',
+    walkShapeLabel: 'Walked geometry type',
+    walkShapeLine: 'Line (ditch, path, fence, crossing)',
+    walkShapePolygon: 'Closed area (rough ground, caution, water, plot)',
+    startWalk: 'Start recording walk',
+    stopWalk: 'Stop recording',
+    recordingWalkStatus: (rawCount: number) =>
+      `Recording walk… ${rawCount} GPS fixes collected (fixes >15 m ignored). Walk along the feature, then press Stop.`,
+    walkCaptured: (vertexCount: number, lengthM: number, accuracyM: number) =>
+      `Simplified walk to ${vertexCount} vertices (${lengthM.toFixed(1)} m, GPS ±${accuracyM.toFixed(1)} m).`,
+    simControlsHeading: 'Simulator field-capture helpers',
+    simEmitFix: 'Emit GPS fix here (±2 m)',
+    simEmitWeakFix: 'Emit weak GPS fix (±18 m, discarded)',
+    simWalkStep: 'Walk forward 3 m',
+    simTurnRight: 'Turn right 90°',
+    categoryLabel: 'Category',
+    nameLabel: 'Name (use keyboard microphone to dictate)',
+    namePlaceholder: 'e.g. Fallen branch, Ditch edge, Apple tree',
+    spokenNameLabel: 'Spoken name (optional TTS override)',
+    radiusLabel: 'Obstacle radius (m)',
+    widthLabel: 'Width (m)',
+    destinationCheck: 'Offer as a navigation destination',
+    notesLabel: 'Field notes (optional)',
+    saveButton: 'Save to map (works offline)',
+    savedNotice: (name: string, reviewed: boolean) =>
+      reviewed
+        ? `Saved "${name}" to map (queued for sync).`
+        : `Saved "${name}" on this device (marked Needs review for an administrator).`,
+    backButton: 'Back to navigator',
+    spoken: {
+      averagingStarted: (seconds: number) => `Averaging GPS for ${seconds} seconds. Hold still.`,
+      pointReady: (accuracyM: number, offsetM: number | null) =>
+        offsetM && offsetM > 0
+          ? `Captured point ${offsetM.toFixed(0)} meters ahead. GPS accuracy plus or minus ${accuracyM.toFixed(1)} meters.`
+          : `Captured point. GPS accuracy plus or minus ${accuracyM.toFixed(1)} meters.`,
+      pointFailed: 'No accurate GPS fixes under 10 meters. Try again in open sky.',
+      walkStarted: 'Recording walk. Walk along the feature, then tap Stop recording.',
+      walkReady: (vertexCount: number, lengthM: number, accuracyM: number) =>
+        `Walk recorded, ${Math.round(lengthM)} meters, ${vertexCount} points, GPS accuracy plus or minus ${accuracyM.toFixed(1)} meters.`,
+      walkFailed: (reason: string) => `Could not build walk geometry. ${reason}`,
+      saved: (name: string) => `Saved ${name} to map.`,
     },
   },
   notFound: 'Page not found.',

@@ -2,16 +2,21 @@ import {
   lazy,
   Suspense,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
 import { Link } from 'react-router';
-import type { CategoryRule, Geometry } from '@alouna/core';
+import { blendCompassAndCourse, type CategoryRule, type Geometry } from '@alouna/core';
 import { useData } from '../data/context';
 import { DataPanel } from '../data/DataPanel';
 import { emptyData, type FeaturePayload, type Mutation } from '../data/types';
+import { FieldCapturePanel } from '../navigator/FieldCapturePanel';
+import { BrowserHeadingProvider } from '../sensors/headingProvider';
+import { BrowserLocationProvider } from '../sensors/locationProvider';
+import type { HeadingFix, LocationFix } from '../sensors/types';
 import { strings } from '../strings';
 import { FeaturePanel } from './FeaturePanel';
 import { ImportExportPanel } from './ImportExportPanel';
@@ -31,7 +36,7 @@ import {
 
 const MapView = lazy(() => import('./MapView').then((m) => ({ default: m.MapView })));
 
-type Tab = 'features' | 'selected' | 'rules' | 'import' | 'routes' | 'live' | 'account';
+type Tab = 'features' | 'selected' | 'capture' | 'rules' | 'import' | 'routes' | 'live' | 'account';
 
 const empty = emptyData(),
   subscribe = () => () => {},
@@ -113,6 +118,31 @@ export function EditorPage() {
   );
   const [showLiveTrails, setShowLiveTrails] = useState(false);
   const [liveFocus, setLiveFocus] = useState<{ key: string; trigger: number } | null>(null);
+  const [captureLocationFix, setCaptureLocationFix] = useState<LocationFix | null>(null);
+  const [captureHeadingFix, setCaptureHeadingFix] = useState<HeadingFix | null>(null);
+
+  useEffect(() => {
+    if (tab !== 'capture' || !store) return;
+    const locProvider = new BrowserLocationProvider();
+    const headProvider = new BrowserHeadingProvider({ declinationDegrees: 8 });
+    const unLoc = locProvider.subscribe((fix) => setCaptureLocationFix(fix));
+    const unHead = headProvider.subscribe((fix) => setCaptureHeadingFix(fix));
+    return () => {
+      unLoc();
+      unHead();
+    };
+  }, [tab, store]);
+
+  const captureHeadingDegrees = useMemo(() => {
+    const raw = captureHeadingFix?.degrees ?? 0;
+    if (!captureLocationFix) return raw;
+    return blendCompassAndCourse(
+      raw,
+      captureLocationFix.courseDegrees,
+      captureLocationFix.speedMps,
+      captureLocationFix.accuracyM,
+    );
+  }, [captureHeadingFix, captureLocationFix]);
   const selected = useMemo(
     () => effective.features.find((f) => f.feature.id === selectedId) ?? null,
     [effective.features, selectedId],
@@ -387,7 +417,18 @@ export function EditorPage() {
 
           <aside className="editor-sidebar" aria-label="Editor panels">
             <nav className="tab-bar" role="tablist">
-              {(['features', 'selected', 'rules', 'import', 'routes', 'live', 'account'] as const)
+              {(
+                [
+                  'features',
+                  'selected',
+                  'capture',
+                  'rules',
+                  'import',
+                  'routes',
+                  'live',
+                  'account',
+                ] as const
+              )
                 .filter((id) => id !== 'live' || isAdmin)
                 .map((id) => (
                   <button
@@ -547,6 +588,19 @@ export function EditorPage() {
                   onSave={handleSaveFeature}
                   onDelete={handleDeleteFeature}
                   onDiscardLocal={handleDiscardEntity}
+                />
+              )}
+
+              {tab === 'capture' && (
+                <FieldCapturePanel
+                  rules={effective.rules}
+                  isAdmin={isAdmin}
+                  locationFix={captureLocationFix}
+                  headingDegrees={captureHeadingDegrees}
+                  onSaveFeature={async (id, payload) => {
+                    await handleSaveFeature(id, 0, payload);
+                    setSelectedId(id);
+                  }}
                 />
               )}
 

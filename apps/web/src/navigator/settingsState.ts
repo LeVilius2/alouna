@@ -43,6 +43,7 @@ export interface NavigatorPreferences {
   sonarVolume: number;
   declinationDegrees: number;
   iosHapticsEnabled: boolean;
+  showFieldCapture: boolean;
   lastDestinationId: string | null;
 }
 
@@ -54,6 +55,7 @@ export const DEFAULT_NAVIGATOR_PREFERENCES: NavigatorPreferences = {
   sonarVolume: 0.75,
   declinationDegrees: 8,
   iosHapticsEnabled: false,
+  showFieldCapture: true,
   lastDestinationId: null,
 };
 
@@ -87,6 +89,10 @@ export function loadNavigatorPreferences(): NavigatorPreferences {
           ? parsed.declinationDegrees
           : DEFAULT_NAVIGATOR_PREFERENCES.declinationDegrees,
       iosHapticsEnabled: Boolean(parsed.iosHapticsEnabled),
+      showFieldCapture:
+        typeof parsed.showFieldCapture === 'boolean'
+          ? parsed.showFieldCapture
+          : DEFAULT_NAVIGATOR_PREFERENCES.showFieldCapture,
       lastDestinationId:
         typeof parsed.lastDestinationId === 'string' && parsed.lastDestinationId
           ? parsed.lastDestinationId

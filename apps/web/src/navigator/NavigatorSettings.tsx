@@ -91,6 +91,15 @@ export function NavigatorSettings({
         <span>{t.iosHaptics}</span>
       </label>
 
+      <label className="check-row nav-check">
+        <input
+          type="checkbox"
+          checked={prefs.showFieldCapture}
+          onChange={(e) => onChange({ ...prefs, showFieldCapture: e.target.checked })}
+        />
+        <span>{t.showFieldCapture}</span>
+      </label>
+
       <div className="data-actions">
         <button type="button" className="control-button" onClick={onTestSonar}>
           {t.testSonar}

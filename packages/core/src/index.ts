@@ -22,3 +22,4 @@ export * from './guidance/offRoute';
 export * from './guidance/hazards';
 export * from './guidance/guidanceEngine';
 export * from './guidance/heading';
+export * from './capture/fieldCapture';

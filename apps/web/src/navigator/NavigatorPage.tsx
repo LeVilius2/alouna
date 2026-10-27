@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router';
 import {
+  DEFAULT_RULES,
   GuidanceEngine,
   blendCompassAndCourse,
   boundsOf,
@@ -21,8 +22,9 @@ import { WebAudioSonar, type Sonar } from '../audio/sonar';
 import { BrowserSpeech, type Speech } from '../audio/speech';
 import { useData } from '../data/context';
 import { DataPanel } from '../data/DataPanel';
-import { emptyData } from '../data/types';
+import { emptyData, type FeaturePayload } from '../data/types';
 import { useLiveSharing } from '../data/useLiveSharing';
+import { FieldCapturePanel } from './FieldCapturePanel';
 import { LiveSharingControl } from './LiveSharingControl';
 import type { PlannerRequest } from '../editor/planner.worker';
 import { pointDestinations, routingMap } from '../editor/routeState';
@@ -80,7 +82,9 @@ export function NavigatorPage({
   const t = strings.navigator;
 
   const [prefs, setPrefs] = useState<NavigatorPreferences>(() => loadNavigatorPreferences());
-  const [screenMode, setScreenMode] = useState<'home' | 'settings' | 'navigating'>('home');
+  const [screenMode, setScreenMode] = useState<'home' | 'settings' | 'navigating' | 'capture'>(
+    'home',
+  );
   const [useSimulator, setUseSimulator] = useState(false);
   const [activeDest, setActiveDest] = useState<SortedDestination | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -162,23 +166,20 @@ export function NavigatorPage({
     hapticsRef.current?.setIosHapticSwitchEnabled(prefs.iosHapticsEnabled);
   }, [prefs]);
 
-  // Seed initial simulated position when simulator toggle is turned on
-  useEffect(() => {
-    if (!useSimulator || !map) return;
-    const startPos = defaultSimulatedStartPosition(map.features);
-    const now = Date.now();
-    simSensors.emit(
-      { position: startPos, accuracyM: 2, timestamp: now, speedMps: 0 },
-      { degrees: 0, timestamp: now },
-    );
-  }, [useSimulator, map, simSensors]);
-
   // Subscribe to either real browser sensors or simulated sensors
   useEffect(() => {
     if (!store) return;
     if (useSimulator) {
       const unLoc = simSensors.location.subscribe((fix) => setLocationFix(fix));
       const unHead = simSensors.heading.subscribe((fix) => setHeadingFix(fix));
+      if (map) {
+        const startPos = defaultSimulatedStartPosition(map.features);
+        const now = Date.now();
+        simSensors.emit(
+          { position: startPos, accuracyM: 2, timestamp: now, speedMps: 0 },
+          { degrees: 0, timestamp: now },
+        );
+      }
       return () => {
         unLoc();
         unHead();
@@ -196,7 +197,7 @@ export function NavigatorPage({
       unHead();
       headingProviderRef.current = null;
     };
-  }, [store, useSimulator, prefs.declinationDegrees, simSensors]);
+  }, [store, useSimulator, map, prefs.declinationDegrees, simSensors]);
 
   const effectiveHeadingDegrees = useMemo(() => {
     const rawCompass = headingFix?.degrees ?? 0;
@@ -617,22 +618,57 @@ export function NavigatorPage({
     speechRef.current?.speak(text);
   };
 
-  const simStep = (metres: number, turnDeltaDegrees = 0) => {
+  const simTickRef = useRef<number>(0);
+  const simStateRef = useRef<{ position: LonLat; headingDegrees: number } | null>(null);
+
+  const simStep = (metres: number, turnDeltaDegrees = 0): LocationFix => {
     const pos =
+      simStateRef.current?.position ??
       locationFix?.position ??
       (map ? defaultSimulatedStartPosition(map.features) : ([25.695, 55.636] as LonLat));
-    const nextHeading = normalizeDegrees((headingFix?.degrees ?? 0) + turnDeltaDegrees);
+    const currentHeading = simStateRef.current?.headingDegrees ?? headingFix?.degrees ?? 0;
+    const nextHeading = normalizeDegrees(currentHeading + turnDeltaDegrees);
     const nextPos = metres !== 0 ? moveWalker(pos, nextHeading, metres) : pos;
-    const now = Date.now();
-    simSensors.emit(
-      {
-        position: nextPos,
-        accuracyM: simWeakGps ? 25 : 2,
-        timestamp: now,
-        speedMps: Math.abs(metres) > 0 ? 1.2 : 0,
-      },
-      { degrees: nextHeading, timestamp: now },
-    );
+    simStateRef.current = { position: nextPos, headingDegrees: nextHeading };
+    simTickRef.current += 1;
+    const now = Date.now() + simTickRef.current;
+    const fix: LocationFix = {
+      position: nextPos,
+      accuracyM: simWeakGps ? 25 : 2,
+      timestamp: now,
+      speedMps: Math.abs(metres) > 0 ? 1.2 : 0,
+    };
+    simSensors.emit(fix, { degrees: nextHeading, timestamp: now });
+    return fix;
+  };
+
+  const simEmitFix = (accuracyM: number): LocationFix => {
+    const pos =
+      simStateRef.current?.position ??
+      locationFix?.position ??
+      (map ? defaultSimulatedStartPosition(map.features) : ([25.695, 55.636] as LonLat));
+    const currentHeading = simStateRef.current?.headingDegrees ?? headingFix?.degrees ?? 0;
+    simStateRef.current = { position: pos, headingDegrees: currentHeading };
+    simTickRef.current += 1;
+    const now = Date.now() + simTickRef.current;
+    const fix: LocationFix = {
+      position: pos,
+      accuracyM,
+      timestamp: now,
+      speedMps: 0,
+    };
+    simSensors.emit(fix, { degrees: currentHeading, timestamp: now });
+    return fix;
+  };
+
+  const handleSaveCapturedFeature = async (id: string, payload: FeaturePayload) => {
+    if (!store) return;
+    await store.enqueue({
+      kind: 'save-feature',
+      entityId: id,
+      expectedRevision: 0,
+      payload,
+    });
   };
 
   if (!store) {
@@ -679,6 +715,21 @@ export function NavigatorPage({
         />
       )}
 
+      {screenMode === 'capture' && (
+        <FieldCapturePanel
+          rules={map?.rules ?? data.snapshot?.rules ?? DEFAULT_RULES}
+          isAdmin={data.profile?.role === 'admin'}
+          locationFix={locationFix}
+          headingDegrees={effectiveHeadingDegrees}
+          onSpeak={(text) => speechRef.current?.speak(text)}
+          useSimulator={useSimulator}
+          onSimulateFix={simEmitFix}
+          onSimulateStep={simStep}
+          onSaveFeature={handleSaveCapturedFeature}
+          onClose={() => setScreenMode('home')}
+        />
+      )}
+
       {screenMode === 'home' && (
         <section className="navigator-home stack" aria-label={t.whereTo}>
           <h2>{t.whereTo}</h2>
@@ -687,7 +738,24 @@ export function NavigatorPage({
             <input
               type="checkbox"
               checked={useSimulator}
-              onChange={(e) => setUseSimulator(e.target.checked)}
+              onChange={(e) => {
+                const enabled = e.target.checked;
+                setUseSimulator(enabled);
+                if (enabled && map) {
+                  const startPos = defaultSimulatedStartPosition(map.features);
+                  const now = Date.now();
+                  simStateRef.current = { position: startPos, headingDegrees: 0 };
+                  setLocationFix({
+                    position: startPos,
+                    accuracyM: 2,
+                    timestamp: now,
+                    speedMps: 0,
+                  });
+                  setHeadingFix({ degrees: 0, timestamp: now });
+                } else {
+                  simStateRef.current = null;
+                }
+              }}
             />
             <span>{t.simToggle}</span>
           </label>
@@ -738,6 +806,24 @@ export function NavigatorPage({
                 ))}
               </ul>
             </>
+          )}
+
+          {prefs.showFieldCapture && (
+            <button
+              type="button"
+              className="big-button big-button--secondary"
+              aria-label={t.addHereButton}
+              onClick={() => {
+                setScreenMode('capture');
+                void sonarRef.current?.unlockFromTap();
+                if (!useSimulator) {
+                  void headingProviderRef.current?.requestPermission?.();
+                }
+              }}
+            >
+              <span>{t.addHereButton}</span>
+              <span className="big-button__hint">{t.addHereHint}</span>
+            </button>
           )}
 
           <button
