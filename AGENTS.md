@@ -260,3 +260,25 @@ _(agents: append milestone notes here)_
 - Unit tests (`packages/core/src/guidance/guidance.test.ts`,
   `apps/web/src/navigator/navigator.test.tsx`) and Playwright offline e2e test in
   `apps/web/e2e/routes.spec.ts` all pass.
+
+### M6
+
+- Navigator sharing is explicitly opt-in for the current account/page session,
+  with 1.5-second Broadcast updates and Presence. It stops on opt-out, navigation
+  stop, backgrounding, offline state, sign-out and unmount; reconnects sample the
+  current position without an offline queue. Stale fixes/headings are removed.
+- Administrator Live users tab shows separate devices, names, heading, reported
+  metric accuracy circles, destination, route/progress and available battery.
+  Simulated positions are labelled; stale/left/stopped markers disappear.
+  Optional session trails are bounded, volatile and never written to `tracks`.
+- Security refinement: private `live-positions:<auth-user-uuid>` channels replace
+  the plan's single shared writable topic, so RLS binds identity to the sender.
+  Migration `0004_live_location.sql` allows active self-send and administrator
+  receive, with Broadcast/Presence access tests. No runtime dependencies added.
+- Local lint, typecheck, 98 unit tests, production build and four Chromium browser
+  tests pass. The two-session browser test uses the actual Supabase client with
+  an isolated protocol fixture; real PostgreSQL policy checks and deployment
+  verification are pending. Real iPhone field testing remains M8.
+- See `docs/LIVE_LOCATION.md` for lifecycle, authorization-cache limits, migration
+  prerequisites and verification. Latest policy-eligible dependencies checked;
+  no updates were available. Optional permanent tracks remain deferred.

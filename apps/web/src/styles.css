@@ -494,6 +494,45 @@ a {
 .manual-pad:focus-visible {
   outline: 3px solid #facc15;
 }
+
+.live-user-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 14px;
+}
+.live-user-card {
+  border: 1px solid #52525b;
+  border-radius: 12px;
+  padding: 12px;
+}
+.live-user-card h3 {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.live-user-card p {
+  margin-block: 8px;
+}
+.live-map-marker {
+  color: #fff;
+  background: #18181b;
+  border: 3px solid #38bdf8;
+  border-radius: 8px 8px 8px 0;
+  padding: 6px 10px;
+  font-size: 15px;
+  font-weight: 700;
+  max-width: 220px;
+  overflow-wrap: anywhere;
+  box-shadow: 0 2px 6px #0009;
+}
+.live-sharing {
+  border: 1px solid #52525b;
+  padding: 12px;
+  border-radius: 12px;
+}
+.live-sharing p {
+  margin-block: 8px;
+}
 .editor-form input[type='range'] {
   width: 100%;
   min-height: 44px;

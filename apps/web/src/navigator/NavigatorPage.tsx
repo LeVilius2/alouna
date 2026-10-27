@@ -22,6 +22,8 @@ import { BrowserSpeech, type Speech } from '../audio/speech';
 import { useData } from '../data/context';
 import { DataPanel } from '../data/DataPanel';
 import { emptyData } from '../data/types';
+import { useLiveSharing } from '../data/useLiveSharing';
+import { LiveSharingControl } from './LiveSharingControl';
 import type { PlannerRequest } from '../editor/planner.worker';
 import { pointDestinations, routingMap } from '../editor/routeState';
 import { BrowserHeadingProvider } from '../sensors/headingProvider';
@@ -69,7 +71,7 @@ export function NavigatorPage({
   sonarFactory?: () => Sonar;
   speechFactory?: () => Speech;
 } = {}) {
-  const { store } = useData();
+  const { store, client, offline } = useData();
   const data = useSyncExternalStore(
     store?.subscribe ?? subscribe,
     store?.getSnapshot ?? getEmpty,
@@ -87,6 +89,9 @@ export function NavigatorPage({
   const [locationFix, setLocationFix] = useState<LocationFix | null>(null);
   const [headingFix, setHeadingFix] = useState<HeadingFix | null>(null);
   const [batteryPercent, setBatteryPercent] = useState<number | null>(null);
+  const [sharingChoice, setSharingChoice] = useState<{ account: object; enabled: boolean } | null>(
+    null,
+  );
 
   // Simulator controls state
   const [simAutoPlaying, setSimAutoPlaying] = useState(false);
@@ -191,7 +196,7 @@ export function NavigatorPage({
       unHead();
       headingProviderRef.current = null;
     };
-  }, [store, useSimulator, prefs.declinationDegrees]);
+  }, [store, useSimulator, prefs.declinationDegrees, simSensors]);
 
   const effectiveHeadingDegrees = useMemo(() => {
     const rawCompass = headingFix?.degrees ?? 0;
@@ -203,6 +208,63 @@ export function NavigatorPage({
       locationFix.accuracyM,
     );
   }, [headingFix, locationFix]);
+
+  const shareEnabled = !!store && sharingChoice?.account === store && sharingChoice.enabled;
+  useEffect(() => {
+    if (!shareEnabled || screenMode !== 'navigating') return;
+    let active = true;
+    const read = async () => {
+      const percent = await readBatteryPercent();
+      if (active) setBatteryPercent(percent);
+    };
+    const timer = setInterval(() => {
+      void read();
+    }, 30_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [shareEnabled, screenMode]);
+  const sharingStatus = useLiveSharing(
+    client,
+    store?.userId ?? null,
+    shareEnabled &&
+      screenMode === 'navigating' &&
+      !!map &&
+      !offline &&
+      data.profile?.active === true,
+    {
+      fix: locationFix,
+      heading: headingFix ? effectiveHeadingDegrees : null,
+      headingTimestamp: headingFix?.timestamp ?? null,
+      destinationId: activeDest?.feature.id ?? null,
+      route: !calculating && !routeError ? simRouteWaypoints : null,
+      remainingM: stepResult?.carrot?.distanceRemainingM ?? null,
+      progress: stepResult?.carrot
+        ? stepResult.carrot.distanceAlongM /
+          Math.max(0.001, stepResult.carrot.distanceAlongM + stepResult.carrot.distanceRemainingM)
+        : null,
+      source: useSimulator ? 'simulator' : 'gps',
+      battery: batteryPercent,
+      status: calculating
+        ? 'recalculating'
+        : routeError
+          ? 'waiting-gps'
+          : (stepResult?.status ?? 'waiting-gps'),
+    },
+  );
+  const sharingControl = (
+    <LiveSharingControl
+      compact={screenMode === 'navigating'}
+      enabled={shareEnabled}
+      onChange={(enabled) => {
+        if (store) setSharingChoice({ account: store, enabled });
+      }}
+      status={
+        shareEnabled && screenMode === 'navigating' && (offline || !map) ? 'error' : sharingStatus
+      }
+    />
+  );
 
   const speakCues = useCallback((cues: readonly GuidanceSpeechCue[]) => {
     for (const cue of cues) {
@@ -613,6 +675,7 @@ export function NavigatorPage({
             speechRef.current?.speak(t.spoken.voiceTestSample);
           }}
           onClose={() => setScreenMode('home')}
+          sharingControl={sharingControl}
         />
       )}
 
@@ -628,6 +691,8 @@ export function NavigatorPage({
             />
             <span>{t.simToggle}</span>
           </label>
+
+          {sharingControl}
 
           {!map ? (
             <p role="alert">{strings.editor.route.unavailable}</p>
@@ -743,6 +808,7 @@ export function NavigatorPage({
             <span>{t.stopButton}</span>
             <span className="big-button__hint">{t.stopHint}</span>
           </button>
+          {sharingControl}
 
           <button
             type="button"

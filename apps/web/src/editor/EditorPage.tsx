@@ -17,6 +17,8 @@ import { FeaturePanel } from './FeaturePanel';
 import { ImportExportPanel } from './ImportExportPanel';
 import type { BasemapId, DrawTool } from './MapView';
 import { RulesPanel } from './RulesPanel';
+import { LiveUsers } from './LiveUsers';
+import { useLiveUsers } from '../data/useLiveUsers';
 import { RouteTester } from './RouteTester';
 import { useRouteTester } from './useRouteTester';
 import type { RouteMapOverlay } from './routeState';
@@ -29,7 +31,7 @@ import {
 
 const MapView = lazy(() => import('./MapView').then((m) => ({ default: m.MapView })));
 
-type Tab = 'features' | 'selected' | 'rules' | 'import' | 'routes' | 'account';
+type Tab = 'features' | 'selected' | 'rules' | 'import' | 'routes' | 'live' | 'account';
 
 const empty = emptyData(),
   subscribe = () => () => {},
@@ -101,6 +103,16 @@ export function EditorPage() {
         }
       : null;
   const isAdmin = data.profile?.role === 'admin';
+  const live = useLiveUsers(
+    store?.userId ?? null,
+    isAdmin &&
+      tab === 'live' &&
+      !!data.snapshot &&
+      data.error !== 'denied' &&
+      data.error !== 'invalid-data',
+  );
+  const [showLiveTrails, setShowLiveTrails] = useState(false);
+  const [liveFocus, setLiveFocus] = useState<{ key: string; trigger: number } | null>(null);
   const selected = useMemo(
     () => effective.features.find((f) => f.feature.id === selectedId) ?? null,
     [effective.features, selectedId],
@@ -283,7 +295,7 @@ export function EditorPage() {
                 className={`tool-button${tool === mode ? ' tool-button--active' : ''}`}
                 onClick={() => {
                   setTool(mode);
-                  if (tab === 'routes') setTab('features');
+                  if (tab === 'routes' || tab === 'live') setTab('features');
                 }}
               >
                 {t.draw[mode]}
@@ -355,9 +367,9 @@ export function EditorPage() {
               hiddenCategories={hiddenCategories}
               showDisabled={showDisabled}
               showDeleted={showDeleted}
-              selectedId={tab === 'routes' ? null : selectedId}
+              selectedId={tab === 'routes' || tab === 'live' ? null : selectedId}
               basemap={basemap}
-              tool={tab === 'routes' ? 'pan' : tool}
+              tool={tab === 'routes' || tab === 'live' ? 'pan' : tool}
               fitTrigger={fitTrigger}
               onSelect={selectFeature}
               onCreateFromDraw={(geom, rad) => void handleCreateFromDraw(geom, rad)}
@@ -366,13 +378,18 @@ export function EditorPage() {
               routePicking={tab === 'routes' && routeTest.picking !== null}
               onRoutePick={routeTest.pick}
               onBounds={routeTest.setBounds}
+              liveUsers={live.users}
+              liveNow={live.now}
+              showLiveTrails={showLiveTrails}
+              liveFocus={liveFocus}
             />
           </Suspense>
 
           <aside className="editor-sidebar" aria-label="Editor panels">
             <nav className="tab-bar" role="tablist">
-              {(['features', 'selected', 'rules', 'import', 'routes', 'account'] as const).map(
-                (id) => (
+              {(['features', 'selected', 'rules', 'import', 'routes', 'live', 'account'] as const)
+                .filter((id) => id !== 'live' || isAdmin)
+                .map((id) => (
                   <button
                     key={id}
                     type="button"
@@ -383,8 +400,7 @@ export function EditorPage() {
                   >
                     {t.tabs[id]}
                   </button>
-                ),
-              )}
+                ))}
             </nav>
 
             <div className="sidebar-body">
@@ -556,6 +572,23 @@ export function EditorPage() {
               )}
 
               {tab === 'account' && <DataPanel />}
+              {tab === 'live' &&
+                (isAdmin ? (
+                  <LiveUsers
+                    users={live.users}
+                    now={live.now}
+                    error={!!live.error}
+                    unavailable={live.unavailable}
+                    features={data.snapshot?.features ?? []}
+                    showTrails={showLiveTrails}
+                    onTrails={setShowLiveTrails}
+                    onFocus={(key) =>
+                      setLiveFocus((value) => ({ key, trigger: (value?.trigger ?? 0) + 1 }))
+                    }
+                  />
+                ) : (
+                  <p role="status">{strings.live.adminOnly}</p>
+                ))}
               {tab === 'routes' && (
                 <RouteTester
                   test={routeTest}

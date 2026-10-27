@@ -3,6 +3,55 @@
  */
 export const strings = {
   appName: 'Alouna',
+  live: {
+    tab: 'Live users',
+    heading: 'Live walkers',
+    share: 'Share live location with administrators while navigating',
+    shareHint:
+      'Off by default. Stops when you stop navigation, hide this page, go offline, or sign out. No permanent track is recorded.',
+    previewHint: 'Simulated positions are labelled as test data in the editor.',
+    sharing: {
+      off: 'Live location is off.',
+      connecting: 'Connecting live location…',
+      connected: 'Sharing live location with administrators.',
+      error: 'Live sharing is unavailable. Navigation can continue offline.',
+      background: 'Live location is paused while this page is hidden.',
+    },
+    adminOnly: 'Only an active administrator can view live walkers.',
+    privacy:
+      'Shows only walkers who chose to share during navigation. Positions come from their browsers; this view does not provide walking guidance.',
+    waiting: 'Waiting for a walker to share live location.',
+    unavailable: 'Live location is unavailable. Check your connection and Realtime configuration.',
+    reconnecting: 'Some live connections are unavailable. Last positions are not shown as current.',
+    unnamed: 'Unnamed walker',
+    device: (name: string, session: string) => `${name} · session ${session.slice(0, 4)}`,
+    online: 'Online',
+    offline: 'Not sharing / disconnected',
+    stale: 'No fresh position. Last location is hidden.',
+    simulated: 'Simulated test',
+    gps: 'Phone GPS',
+    weak: 'GPS weak',
+    lastSeen: (seconds: number) => `Last update ${seconds.toFixed(0)} seconds ago`,
+    neverSeen: 'No position received yet.',
+    accuracy: (m: number) => `Reported accuracy ±${m.toFixed(1)} m`,
+    headingValue: (degrees: number) => `Heading ${degrees.toFixed(0)}°`,
+    battery: (percent: number) => `Battery ${percent.toFixed(0)}%`,
+    destination: (name: string) => `To ${name}`,
+    unknownDestination: 'Destination unavailable',
+    progress: (percent: number, remaining: number | null) =>
+      `${percent.toFixed(0)}% along route${remaining === null ? '' : ` · ${remaining.toFixed(1)} m remaining`}`,
+    showTrail: 'Show temporary session trails',
+    focus: (name: string) => `Show ${name} on map`,
+    marker: (name: string) => `${name}, shared location`,
+    statuses: {
+      guiding: 'Navigating',
+      'weak-gps': 'GPS weak',
+      recalculating: 'Recalculating',
+      arrived: 'Arrived',
+      'waiting-gps': 'Waiting for GPS',
+      stopped: 'Stopped',
+    },
+  },
   data: {
     title: 'Map data',
     notConfigured: 'The map data connection is not configured yet.',
@@ -52,6 +101,7 @@ export const strings = {
       rules: 'Rules',
       import: 'Import / Export',
       routes: 'Test route',
+      live: 'Live users',
       account: 'Account & sync',
     },
     route: {

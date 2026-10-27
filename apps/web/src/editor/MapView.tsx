@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Map as MapLibreMap,
+  Marker,
   setWorkerUrl,
   type GeoJSONSource,
   type MapLayerMouseEvent,
@@ -23,6 +24,8 @@ import { circlePolygonToPoint, type EffectiveFeature } from './state';
 import { debugGeoJson, viewportBounds, type RouteMapOverlay } from './routeState';
 import { routeGeoJson, routeLayers } from './routeLayers';
 import { strings } from '../strings';
+import { freshPosition, type LiveUser } from '../data/livePosition';
+import { liveColor, liveGeoJson, liveLayers } from './liveLayers';
 
 // MapLibre 6 requires an explicit worker asset when consumed through a bundler.
 setWorkerUrl(mapWorkerUrl);
@@ -83,6 +86,7 @@ function makeStyle(): StyleSpecification {
       },
       'alouna-costs': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
       'alouna-route': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      'alouna-live': { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
     },
     layers: [
       {
@@ -132,6 +136,7 @@ function makeStyle(): StyleSpecification {
         },
       },
       ...routeLayers.slice(1),
+      ...liveLayers,
     ],
   };
 }
@@ -161,6 +166,10 @@ export function MapView({
   routePicking,
   onRoutePick,
   onBounds,
+  liveUsers = [],
+  liveNow = 0,
+  showLiveTrails = false,
+  liveFocus,
 }: {
   features: readonly EffectiveFeature[];
   rules: readonly CategoryRule[];
@@ -178,6 +187,10 @@ export function MapView({
   routePicking?: boolean;
   onRoutePick?: (point: LonLat) => void;
   onBounds?: (bounds: Bounds) => void;
+  liveUsers?: readonly LiveUser[];
+  liveNow?: number;
+  showLiveTrails?: boolean;
+  liveFocus?: { key: string; trigger: number } | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -185,6 +198,7 @@ export function MapView({
   const readyRef = useRef(false);
   const [ready, setReady] = useState(false);
   const didInitialFitRef = useRef(false);
+  const liveMarkers = useRef(new Map<string, Marker>());
   const routeActive = !!routeOverlay;
   const callbacksRef = useRef({
     onSelect,
@@ -226,6 +240,7 @@ export function MapView({
     if (!el) return;
     let map: MapLibreMap | null = null;
     let draw: TerraDraw | null = null;
+    const markers = liveMarkers.current;
     try {
       map = new MapLibreMap({
         container: el,
@@ -340,6 +355,8 @@ export function MapView({
         /* ignore */
       }
       mapRef.current = null;
+      for (const marker of markers.values()) marker.remove();
+      markers.clear();
     };
   }, []);
 
@@ -448,6 +465,48 @@ export function MapView({
     );
     map.getCanvas().style.cursor = routePicking ? 'crosshair' : '';
   }, [ready, routeOverlay, routePicking]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    void (map.getSource('alouna-live') as GeoJSONSource | undefined)?.setData(
+      liveGeoJson(liveUsers, liveNow, showLiveTrails),
+    );
+    const visible = new Set<string>();
+    for (const user of liveUsers) {
+      const position = freshPosition(user, liveNow);
+      if (!position) continue;
+      visible.add(user.key);
+      let marker = liveMarkers.current.get(user.key);
+      if (!marker) {
+        const element = document.createElement('div');
+        element.className = 'live-map-marker';
+        marker = new Marker({ element, anchor: 'bottom', offset: [0, -10] })
+          .setLngLat([...position])
+          .addTo(map);
+        liveMarkers.current.set(user.key, marker);
+      }
+      marker.setLngLat([...position]);
+      marker.getElement().textContent = user.name || strings.live.unnamed;
+      marker
+        .getElement()
+        .setAttribute('aria-label', strings.live.marker(user.name || strings.live.unnamed));
+      marker.getElement().style.borderColor = liveColor(user);
+    }
+    for (const [key, marker] of liveMarkers.current)
+      if (!visible.has(key)) {
+        marker.remove();
+        liveMarkers.current.delete(key);
+      }
+  }, [ready, liveUsers, liveNow, showLiveTrails]);
+
+  useEffect(() => {
+    if (!ready || !liveFocus) return;
+    const marker = liveMarkers.current.get(liveFocus.key),
+      map = mapRef.current;
+    if (marker && map)
+      map.easeTo({ center: marker.getLngLat(), zoom: Math.max(18, map.getZoom()), duration: 300 });
+  }, [ready, liveFocus]);
 
   useEffect(() => {
     const map = mapRef.current;

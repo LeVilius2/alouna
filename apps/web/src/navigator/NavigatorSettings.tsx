@@ -1,4 +1,5 @@
 import type { VoiceLocale } from '../audio/speech';
+import type { ReactNode } from 'react';
 import { strings } from '../strings';
 import type { NavigatorPreferences } from './settingsState';
 
@@ -8,17 +9,20 @@ export function NavigatorSettings({
   onTestSonar,
   onTestSpeech,
   onClose,
+  sharingControl,
 }: {
   prefs: NavigatorPreferences;
   onChange: (next: NavigatorPreferences) => void;
   onTestSonar: () => void;
   onTestSpeech: () => void;
   onClose: () => void;
+  sharingControl?: ReactNode;
 }) {
   const t = strings.navigator.settings;
   return (
     <section className="navigator-settings stack" aria-label={t.heading}>
       <h2>{t.heading}</h2>
+      {sharingControl}
 
       <label className="nav-field">
         <span>{t.voiceLocale}</span>
