@@ -55,6 +55,9 @@ an explicit recording choice and a tested retention policy.
 
 1. Apply `supabase/migrations/0004_live_location.sql` to the Alouna database through
    the private operator connection using `psql -v ON_ERROR_STOP=1`.
+   Also apply `0005_scoped_map_revision.sql`: it scopes existing revision-counter
+   writes to the singleton row, fixing editor writes under self-hosted Supabase's
+   safe-update guard. Keep that guard enabled.
 2. The supported Supabase bundle must already provide `realtime.messages`, its RLS,
    authenticated SELECT/INSERT grants, and `realtime.topic()`. The migration checks
    those prerequisites. Do not create/alter the Supabase-owned schema or disable RLS.

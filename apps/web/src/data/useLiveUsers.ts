@@ -22,8 +22,15 @@ export function useLiveUsers(userId: string | null, enabled: boolean) {
     const transport = createLiveTransport(client),
       channels = new Map<string, LiveChannel>();
     const publish = () => {
-      if (active)
-        setState({ scope, users: users.values(), error: error || failedChannels.size > 0 });
+      if (active) {
+        const timestamp = Date.now();
+        setNow(timestamp);
+        setState({
+          scope,
+          users: users.values(timestamp),
+          error: error || failedChannels.size > 0,
+        });
+      }
     };
     const users = new LiveUserStore(publish);
     const refresh = async () => {
@@ -80,7 +87,6 @@ export function useLiveUsers(userId: string | null, enabled: boolean) {
       void refresh();
     }, 30_000);
     const ageTimer = setInterval(() => {
-      setNow(Date.now());
       publish();
     }, 1000);
     return () => {

@@ -65,7 +65,7 @@ CI (`.github/workflows/ci.yml`) runs lint, typecheck, test and build on every pu
 - [x] M3 – Editor: map, drawing, rules panel, import/export
 - [x] M4 – Editor: route tester, cost overlay, walk simulator
 - [x] M5 – Navigator (web): heading, location, guidance, sonar, speech, hazards
-- [ ] M6 – Live location (Realtime)
+- [x] M6 – Live location (Realtime)
 - [ ] M7 – Field capture: Add here, record walk, offset capture
 - [ ] M8 – PWA polish, accessibility audit, field testing
 - [ ] M9 – (optional) External GNSS receiver support (hardware; minimal code)
@@ -261,7 +261,7 @@ _(agents: append milestone notes here)_
   `apps/web/src/navigator/navigator.test.tsx`) and Playwright offline e2e test in
   `apps/web/e2e/routes.spec.ts` all pass.
 
-### M6
+### M6 (done)
 
 - Navigator sharing is explicitly opt-in for the current account/page session,
   with 1.5-second Broadcast updates and Presence. It stops on opt-out, navigation
@@ -275,10 +275,18 @@ _(agents: append milestone notes here)_
   the plan's single shared writable topic, so RLS binds identity to the sender.
   Migration `0004_live_location.sql` allows active self-send and administrator
   receive, with Broadcast/Presence access tests. No runtime dependencies added.
-- Local lint, typecheck, 98 unit tests, production build and four Chromium browser
+- Local lint, typecheck, 99 unit tests, production build and four Chromium browser
   tests pass. The two-session browser test uses the actual Supabase client with
-  an isolated protocol fixture; real PostgreSQL policy checks and deployment
-  verification are pending. Real iPhone field testing remains M8.
+  an isolated protocol fixture. PostgreSQL policy tests pass in CI and on the
+  actual self-hosted instance. Live simulated navigation in separate browser tabs
+  verified movement, route/progress, heading and opt-out clearing. Real iPhone
+  field testing remains M8.
+- Release checks found and fixed two issues: `0005_scoped_map_revision.sql` scopes
+  existing counter writes to their singleton row so Supabase's safe-update guard
+  accepts editor changes; incoming positions now update their display clock
+  atomically, preventing a marker flicker between display ticks. Regression tests
+  cover revision changes and packet freshness. Map clicks in browser tests wait
+  for the accessible map loading state before interacting.
 - See `docs/LIVE_LOCATION.md` for lifecycle, authorization-cache limits, migration
   prerequisites and verification. Latest policy-eligible dependencies checked;
   no updates were available. Optional permanent tracks remain deferred.

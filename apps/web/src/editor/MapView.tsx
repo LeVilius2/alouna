@@ -523,6 +523,7 @@ export function MapView({
       className="editor-map"
       role="region"
       aria-label={strings.editor.route.mapLabel}
+      aria-busy={!ready}
     />
   );
 }

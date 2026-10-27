@@ -89,6 +89,10 @@ test('map clicks, the real worker, exact cost grid and virtual walking work offl
   await page.goto('/editor');
   await page.getByRole('tab', { name: 'Test route' }).click();
   await expect(page.locator('canvas.maplibregl-canvas')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Property map' })).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
   await page.getByRole('button', { name: 'Pick A on map' }).click();
   const canvas = page.locator('canvas.maplibregl-canvas');
   const box = (await canvas.boundingBox())!;
